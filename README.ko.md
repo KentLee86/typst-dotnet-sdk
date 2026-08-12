@@ -5,12 +5,31 @@
 
 - `Cetz.Renderer.Core`: 렌더 결과를 GUI 공통 RGBA 문서/페이지로 변환합니다.
 - `Cetz.Renderer.Avalonia`: 공통 문서를 표시하는 재사용 가능한 `CetzView`를 제공합니다.
+- `Cetz.Renderer.Uno`: 공통 문서를 표시하는 Uno Platform용 `CetzView`를 제공합니다.
 - `samples/Cetz.Renderer.Avalonia.Sample`: 소스를 편집하고 즉시 실제 화면을 확인하는 예제입니다.
+- `samples/Cetz.Renderer.Uno.Sample`: 같은 9개 예제를 사용하는 Uno 편집기/다중 페이지 미리보기입니다.
 - `samples/Cetz.Renderer.Demo.Shared`: 모든 GUI 데모가 함께 사용하는 9개 내장 예제 카탈로그입니다.
 
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 ```
+
+Uno Desktop 데모는 다음과 같이 실행합니다. `Cetz.Renderer.Uno`는 Core의
+premultiplied RGBA 페이지를 Uno/WinUI의 premultiplied BGRA 순서로 변환하고,
+DPI 기반 크기와 zoom 및 페이지 간격을 적용합니다.
+
+```xml
+<PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
+<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+```
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
+```
+
+저장소의 네이티브 산출물이 없으면 실행 전에 `CETZ_NATIVE_LIBRARY`를 빌드된
+`cetz_dotnet_native.dll`의 절대 경로로 설정합니다. Windows App SDK 타깃은
+`net8.0-windows10.0.26100`, Skia Desktop 타깃은 `net8.0-desktop`입니다.
 
 Avalonia 데모 상단 드롭다운에서 예제를 선택하면 공용 인메모리 프로젝트가
 소스 편집기와 미리보기에 즉시 로드됩니다. 로컬 import와 SVG 자산이 필요한

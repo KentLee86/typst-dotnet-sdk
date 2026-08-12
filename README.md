@@ -20,7 +20,8 @@ framework:
 
 - `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
-- Additional GUI packages can consume the same Core document model.
+- `Cetz.Renderer.Uno` displays those documents with a reusable WinUI/Uno
+  `CetzView`.
 - GUI adapters share one view/rendering contract; see
   [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
   navigation, lifecycle, and demo requirements.
@@ -52,6 +53,48 @@ dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
 embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
 Uno, or other GUI demos can reuse the same catalog without copying files again.
+
+## Uno Platform
+
+Reference the UI adapter in addition to the native RID package:
+
+```xml
+<PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
+<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+```
+
+The Uno adapter implements the shared `ICetzDocumentView` contract and delegates
+zoom fitting, page modes, navigation, and exact placement to
+`CetzDocumentViewController`. It converts premultiplied RGBA pages to WinUI's
+premultiplied BGRA layout; the adapter owns only Uno bitmap and visual resources:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.Uno;
+
+var view = new CetzView();
+view.SetViewport(1200, 800);
+using var renderController = new CetzRenderController(view);
+await renderController.RenderSourceAsync(typstSource);
+view.SetZoomMode(CetzZoomMode.FitWidth);
+view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+view.MoveNext();
+```
+
+Run the desktop Uno editor and scrolling multi-page preview from the repository
+root. It uses the same nine `Cetz.Renderer.Demo.Shared` examples as the Avalonia
+sample and exposes custom/width/page zoom, continuous/single/facing page modes,
+and previous/next navigation:
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
+```
+
+Set `CETZ_NATIVE_LIBRARY` to a built `cetz_dotnet_native.dll` when it is not
+available under `artifacts/native/win-x64/` before building the sample.
+The verified targets are `net8.0-desktop` (Skia Desktop) and
+`net8.0-windows10.0.26100` (Windows App SDK). The adapter package also contains
+the framework-neutral `net8.0` Uno asset for other Uno heads.
 
 ## Memory rendering
 
