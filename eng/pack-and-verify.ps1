@@ -52,7 +52,8 @@ try {
 $winUiConsumer = Join-Path $root 'artifacts/consumer/winui'
 if (Test-Path $winUiConsumer) { Remove-Item -Recurse -Force $winUiConsumer }
 Copy-Item -Recurse (Join-Path $root 'eng/winui-consumer') $winUiConsumer
-dotnet restore (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') --force --no-cache
+$winUiPackages = Join-Path $winUiConsumer '.nuget/packages'
+dotnet restore (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') --force --no-cache --packages $winUiPackages
 if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer restore failed.' }
 dotnet build (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') -c Release --no-restore
 if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer build failed.' }
@@ -63,7 +64,8 @@ if ($currentRid -eq $Rid) {
     if (Test-Path $consumer) { Remove-Item -Recurse -Force $consumer }
     Copy-Item -Recurse (Join-Path $root 'eng/consumer') $consumer
     $packageId = "Cetz.Renderer.Native.$Rid"
-    dotnet restore (Join-Path $consumer 'CleanConsumer.csproj') --source $feed --ignore-failed-sources -p:CetzNativePackage=$packageId
+    $consumerPackages = Join-Path $consumer '.nuget/packages'
+    dotnet restore (Join-Path $consumer 'CleanConsumer.csproj') --ignore-failed-sources --packages $consumerPackages -p:CetzNativePackage=$packageId
     if ($LASTEXITCODE -ne 0) { throw "$Rid clean consumer restore failed." }
     dotnet run --project (Join-Path $consumer 'CleanConsumer.csproj') -c Release --no-restore -p:CetzNativePackage=$packageId
     if ($LASTEXITCODE -ne 0) { throw "$Rid clean consumer run failed." }

@@ -18,7 +18,8 @@ Use `Cetz.Renderer.Native.linux-x64` on Linux x64. Native assets follow NuGet's
 GUI integrations are layered so the native SDK stays independent from every UI
 framework:
 
-- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
+- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents
+  and owns the shared render, zoom, layout, view-mode, and navigation behavior.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
 - `Cetz.Renderer.WinUI` provides a reusable WinUI 3 `CetzView` on the current
   stable Windows App SDK. It targets `net8.0-windows10.0.19041.0`.
@@ -48,16 +49,18 @@ dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 ```
 
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
-embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
-Uno, or other GUI demos can reuse the same catalog without copying files again.
+embedded examples are UI-independent in-memory projects shared by every GUI
+sample without copying files again.
 
 ## WinUI 3
 
-`CetzView` owns a scrolling multi-page preview. It converts Core's premultiplied
-RGBA pages to WinUI's premultiplied BGRA layout, honors each page's PPI when
-computing device-independent size, and exposes bounded `Zoom` and `PageSpacing`
-dependency properties. Assign `Document` on the UI thread, or use
-`SetDocumentAsync` after rendering on any thread:
+`CetzView` implements the common `ICetzDocumentView` contract. The shared
+`CetzDocumentViewController` is the sole authority for zoom normalization,
+fit-width/fit-page, continuous or paged single/facing layouts, current-page
+navigation, and exact page bounds. The WinUI adapter only converts RGBA to BGRA,
+owns page image resources, dispatches UI access, and scrolls continuous layouts.
+Assign `Document` on the UI thread, or use `SetDocumentAsync` after rendering on
+any thread:
 
 ```csharp
 using Cetz.Renderer.Core;
@@ -66,12 +69,20 @@ using Cetz.Renderer.WinUI;
 using var renderer = new CetzDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView { Zoom = 1.0, PageSpacing = 24 };
+var view = new CetzView
+{
+    ZoomMode = CetzZoomMode.FitWidth,
+    ViewMode = CetzPageViewMode.ContinuousFacing,
+    PageSpacing = 24
+};
 await view.SetDocumentAsync(document);
+view.MoveNext();
 ```
 
-The unpackaged x64 sample uses the shared nine-demo catalog and includes an
-editable source pane, render command, status, and scrolling preview:
+The unpackaged x64 sample uses `CetzRenderController` for latest-request-wins
+rendering while retaining the previous preview after an error. It exposes the
+shared nine-demo catalog, editable source, Custom/Fit width/Fit page,
+continuous/single/facing page modes, previous/next navigation, and page status:
 
 ```powershell
 $env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'

@@ -1,5 +1,6 @@
 using Cetz.Renderer.Core;
 using Cetz.Renderer.Demo.Shared;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -9,7 +10,7 @@ namespace Cetz.Renderer.WinUI.Sample;
 
 public sealed class MainWindow : Window
 {
-    private readonly CetzDocumentRenderer _renderer;
+    private readonly CetzRenderController _renderController;
     private readonly global::Cetz.Renderer.WinUI.CetzView _view = new()
     {
         Zoom = 0.9,
@@ -45,7 +46,21 @@ public sealed class MainWindow : Window
         HorizontalAlignment = HorizontalAlignment.Right,
         Padding = new Thickness(18, 8, 18, 8)
     };
-    private CancellationTokenSource? _renderCancellation;
+    private readonly ComboBox _zoomModePicker = new()
+    {
+        ItemsSource = new[] { "Custom", "Fit width", "Fit page" },
+        SelectedIndex = 1,
+        MinWidth = 110
+    };
+    private readonly ComboBox _viewModePicker = new()
+    {
+        ItemsSource = new[] { "Continuous", "Continuous facing", "Single page", "Facing pages" },
+        SelectedIndex = 0,
+        MinWidth = 150
+    };
+    private readonly Button _previousButton = new() { Content = "Previous", Padding = new Thickness(12, 6, 12, 6) };
+    private readonly Button _nextButton = new() { Content = "Next", Padding = new Thickness(12, 6, 12, 6) };
+    private readonly TextBlock _pageStatus = new() { VerticalAlignment = VerticalAlignment.Center };
     private bool _opened;
     private bool _closed;
 
@@ -55,11 +70,15 @@ public sealed class MainWindow : Window
         var root = BuildLayout();
         Content = root;
 
-        _renderer = new CetzDocumentRenderer(new CetzRendererOptions
-        {
-            NativeLibraryPath = ResolveNativeLibrary(),
-            PackageResolution = CetzPackageResolution.EmbeddedOnly
-        });
+        _renderController = new CetzRenderController(
+            _view,
+            new CetzRendererOptions
+            {
+                NativeLibraryPath = ResolveNativeLibrary(),
+                PackageResolution = CetzPackageResolution.EmbeddedOnly
+            },
+            new DispatcherSynchronizationContext(DispatcherQueue));
+        _renderController.StateChanged += RenderControllerOnStateChanged;
 
         ScrollViewer.SetHorizontalScrollBarVisibility(_source, ScrollBarVisibility.Auto);
         ScrollViewer.SetVerticalScrollBarVisibility(_source, ScrollBarVisibility.Auto);
@@ -67,8 +86,14 @@ public sealed class MainWindow : Window
         SelectDemo();
         _demoPicker.SelectionChanged += DemoPickerOnSelectionChanged;
         _renderButton.Click += RenderButtonOnClick;
+        _zoomModePicker.SelectionChanged += ZoomModePickerOnSelectionChanged;
+        _viewModePicker.SelectionChanged += ViewModePickerOnSelectionChanged;
+        _previousButton.Click += PreviousButtonOnClick;
+        _nextButton.Click += NextButtonOnClick;
         root.Loaded += RootOnLoaded;
         Closed += WindowOnClosed;
+        ApplyViewOptions();
+        UpdatePageStatus();
     }
 
     private Grid BuildLayout()
@@ -109,6 +134,19 @@ public sealed class MainWindow : Window
         Grid.SetRow(_status, 3);
         editor.Children.Add(_status);
 
+        var previewToolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Padding = new Thickness(12, 8, 12, 8),
+            Background = Brush(245, 247, 250)
+        };
+        previewToolbar.Children.Add(_zoomModePicker);
+        previewToolbar.Children.Add(_viewModePicker);
+        previewToolbar.Children.Add(_previousButton);
+        previewToolbar.Children.Add(_nextButton);
+        previewToolbar.Children.Add(_pageStatus);
+
         var previewBorder = new Border
         {
             Background = Brush(221, 228, 238),
@@ -116,12 +154,19 @@ public sealed class MainWindow : Window
             Child = _view
         };
 
+        var preview = new Grid();
+        preview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        preview.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        preview.Children.Add(previewToolbar);
+        Grid.SetRow(previewBorder, 1);
+        preview.Children.Add(previewBorder);
+
         var split = new Grid();
         split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(430) });
         split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         split.Children.Add(editor);
-        Grid.SetColumn(previewBorder, 1);
-        split.Children.Add(previewBorder);
+        Grid.SetColumn(preview, 1);
+        split.Children.Add(preview);
         return split;
     }
 
@@ -148,43 +193,69 @@ public sealed class MainWindow : Window
         if (_closed || _demoPicker.SelectedItem is not CetzDemo demo)
             return;
 
-        _renderCancellation?.Cancel();
-        _renderCancellation?.Dispose();
-        var cancellation = _renderCancellation = new CancellationTokenSource();
-        _renderButton.IsEnabled = false;
-        _demoPicker.IsEnabled = false;
         SetStatus("Rendering…", Brush(88, 99, 115));
 
         try
         {
-            var document = await _renderer.RenderProjectAsync(
+            var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text ?? string.Empty),
-                new CetzDocumentRenderOptions { Ppi = 144 },
-                cancellation.Token);
-            cancellation.Token.ThrowIfCancellationRequested();
-            await _view.SetDocumentAsync(document);
+                new CetzDocumentRenderOptions { Ppi = 144 });
+            if (document is null || _closed)
+                return;
             var pageLabel = document.Pages.Count == 1 ? "page" : "pages";
             var status = $"{demo.DisplayName} · {document.Pages.Count} {pageLabel} · {document.Timing.TotalMilliseconds:F0} ms";
             SetStatus(status, Brush(8, 127, 91));
             Title = $"Cetz.Renderer WinUI 3 Sample — {status} · Typst {document.TypstVersion}";
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-        {
-            SetStatus("Render canceled", Brush(88, 99, 115));
+            UpdatePageStatus();
         }
         catch (Exception exception)
         {
-            SetStatus(exception.Message, Brush(190, 35, 58));
+            SetStatus($"{exception.Message} (previous preview retained)", Brush(190, 35, 58));
             Title = $"Cetz.Renderer WinUI 3 Sample — Error: {exception.Message}";
         }
-        finally
-        {
-            if (ReferenceEquals(_renderCancellation, cancellation) && !_closed)
-            {
-                _renderButton.IsEnabled = true;
-                _demoPicker.IsEnabled = true;
-            }
-        }
+    }
+
+    private void ZoomModePickerOnSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_zoomModePicker.SelectedIndex >= 0) ApplyViewOptions();
+    }
+
+    private void ViewModePickerOnSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_viewModePicker.SelectedIndex >= 0) ApplyViewOptions();
+    }
+
+    private void PreviousButtonOnClick(object sender, RoutedEventArgs args)
+    {
+        _view.MovePrevious();
+        UpdatePageStatus();
+    }
+
+    private void NextButtonOnClick(object sender, RoutedEventArgs args)
+    {
+        _view.MoveNext();
+        UpdatePageStatus();
+    }
+
+    private void ApplyViewOptions()
+    {
+        _view.SetZoomMode((CetzZoomMode)Math.Max(0, _zoomModePicker.SelectedIndex));
+        _view.SetViewMode((CetzPageViewMode)Math.Max(0, _viewModePicker.SelectedIndex));
+        UpdatePageStatus();
+    }
+
+    private void UpdatePageStatus()
+    {
+        var page = _view.PageCount == 0 ? 0 : _view.CurrentPageIndex + 1;
+        _pageStatus.Text = $"Page {page} / {_view.PageCount} · {_view.Zoom:P0}";
+        _previousButton.IsEnabled = _view.CurrentPageIndex > 0;
+        _nextButton.IsEnabled = _view.PageCount > 0 && _view.CurrentPageIndex < _view.PageCount - 1;
+    }
+
+    private void RenderControllerOnStateChanged(object? sender, EventArgs args)
+    {
+        _renderButton.IsEnabled = !_renderController.IsRendering;
+        if (!_renderController.IsRendering) UpdatePageStatus();
     }
 
     private void SelectDemo()
@@ -204,10 +275,9 @@ public sealed class MainWindow : Window
     private void WindowOnClosed(object sender, WindowEventArgs args)
     {
         _closed = true;
-        _renderCancellation?.Cancel();
-        _renderCancellation?.Dispose();
-        _renderCancellation = null;
-        _renderer.Dispose();
+        _renderController.StateChanged -= RenderControllerOnStateChanged;
+        _renderController.Dispose();
+        _view.Dispose();
     }
 
     private static SolidColorBrush Brush(byte red, byte green, byte blue)
@@ -225,5 +295,14 @@ public sealed class MainWindow : Window
         throw new FileNotFoundException(
             "Native runtime was not found. Build it, copy it beside the app, or set CETZ_NATIVE_LIBRARY.",
             besideApp);
+    }
+
+    private sealed class DispatcherSynchronizationContext(DispatcherQueue dispatcher) : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            if (!dispatcher.TryEnqueue(() => callback(state)))
+                throw new InvalidOperationException("The WinUI dispatcher is shutting down.");
+        }
     }
 }

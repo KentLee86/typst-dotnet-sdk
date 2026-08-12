@@ -9,83 +9,171 @@ using Microsoft.UI.Xaml.Media.Imaging;
 namespace Cetz.Renderer.WinUI;
 
 /// <summary>
-/// A scrollable WinUI 3 document view that displays every premultiplied RGBA page.
+/// WinUI 3 adapter for the common document-view controller. Core owns every
+/// layout and navigation decision; this class only owns WinUI image resources,
+/// dispatcher access, and scrolling the selected Core placement into view.
 /// </summary>
-public sealed class CetzView : Grid, IDisposable
+public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
 {
     public static readonly DependencyProperty DocumentProperty = DependencyProperty.Register(
-        nameof(Document),
-        typeof(CetzRenderedDocument),
-        typeof(CetzView),
+        nameof(Document), typeof(CetzRenderedDocument), typeof(CetzView),
         new PropertyMetadata(null, OnDocumentChanged));
 
     public static readonly DependencyProperty ZoomProperty = DependencyProperty.Register(
-        nameof(Zoom),
-        typeof(double),
-        typeof(CetzView),
-        new PropertyMetadata(1d, OnLayoutPropertyChanged));
+        nameof(Zoom), typeof(double), typeof(CetzView),
+        new PropertyMetadata(CetzDocumentViewController.DefaultZoom, OnZoomChanged));
+
+    public static readonly DependencyProperty ZoomModeProperty = DependencyProperty.Register(
+        nameof(ZoomMode), typeof(CetzZoomMode), typeof(CetzView),
+        new PropertyMetadata(CetzZoomMode.Custom, OnZoomModeChanged));
+
+    public static readonly DependencyProperty ViewModeProperty = DependencyProperty.Register(
+        nameof(ViewMode), typeof(CetzPageViewMode), typeof(CetzView),
+        new PropertyMetadata(CetzPageViewMode.ContinuousSingle, OnViewModeChanged));
 
     public static readonly DependencyProperty PageSpacingProperty = DependencyProperty.Register(
-        nameof(PageSpacing),
-        typeof(double),
-        typeof(CetzView),
-        new PropertyMetadata(24d, OnLayoutPropertyChanged));
+        nameof(PageSpacing), typeof(double), typeof(CetzView),
+        new PropertyMetadata(CetzDocumentViewController.DefaultPageSpacing, OnPageSpacingChanged));
 
+    private readonly CetzDocumentViewController _controller = new();
     private readonly ScrollViewer _scrollViewer;
-    private readonly StackPanel _pagePanel;
-    private readonly List<Image> _pageImages = [];
-    private readonly List<object> _imageSources = [];
+    private readonly Canvas _pageCanvas;
+    private readonly WinUiPageResourceSet<WinUiPageResource> _pageResources = new();
+    private bool _syncingProperties;
     private bool _disposed;
 
     public CetzView()
     {
-        _pagePanel = new StackPanel
+        _pageCanvas = new Canvas
         {
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top
         };
         _scrollViewer = new ScrollViewer
         {
-            Content = _pagePanel,
+            Content = _pageCanvas,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             VerticalContentAlignment = VerticalAlignment.Top
         };
+        _scrollViewer.SizeChanged += ScrollViewerOnSizeChanged;
+        _controller.Changed += ControllerOnChanged;
         Children.Add(_scrollViewer);
     }
 
-    /// <summary>The immutable Core document displayed by this view.</summary>
     public CetzRenderedDocument? Document
     {
-        get => (CetzRenderedDocument?)GetValue(DocumentProperty);
-        set => SetValue(DocumentProperty, value);
+        get => _controller.Document;
+        set
+        {
+            ThrowIfDisposed();
+            if (value is null) ReleaseDocument();
+            else SetDocument(value);
+        }
     }
 
-    /// <summary>Page scale relative to its physical size. Values are clamped to 0.1–8.</summary>
     public double Zoom
     {
-        get => (double)GetValue(ZoomProperty);
-        set => SetValue(ZoomProperty, WinUiLayout.NormalizeZoom(value));
+        get => _controller.Zoom;
+        set => SetZoom(value);
     }
 
-    /// <summary>Vertical spacing between pages, in device-independent pixels.</summary>
+    public CetzZoomMode ZoomMode
+    {
+        get => _controller.ZoomMode;
+        set => SetZoomMode(value);
+    }
+
+    public CetzPageViewMode ViewMode
+    {
+        get => _controller.ViewMode;
+        set => SetViewMode(value);
+    }
+
     public double PageSpacing
     {
-        get => (double)GetValue(PageSpacingProperty);
-        set => SetValue(PageSpacingProperty, WinUiLayout.NormalizeSpacing(value));
+        get => _controller.PageSpacing;
+        set => SetPageSpacing(value);
     }
 
-    /// <summary>
-    /// Assigns a document from any thread. The returned task completes after the UI thread
-    /// has created all page image sources.
-    /// </summary>
+    public int CurrentPageIndex => _controller.CurrentPageIndex;
+    public int PageCount => _controller.PageCount;
+    public CetzDocumentViewLayout Layout => _controller.Layout;
+
+    public void SetDocument(CetzRenderedDocument document)
+    {
+        VerifyAccess();
+        _controller.SetDocument(document);
+    }
+
+    public void SetZoom(double zoom)
+    {
+        VerifyAccess();
+        _controller.SetZoom(zoom);
+    }
+
+    public void SetZoomMode(CetzZoomMode mode)
+    {
+        VerifyAccess();
+        _controller.SetZoomMode(mode);
+    }
+
+    public void SetViewMode(CetzPageViewMode mode)
+    {
+        VerifyAccess();
+        _controller.SetViewMode(mode);
+        ScrollCurrentPageIntoView();
+    }
+
+    public void SetViewport(double width, double height)
+    {
+        VerifyAccess();
+        _controller.SetViewport(width, height);
+    }
+
+    public void SetPageSpacing(double pageSpacing)
+    {
+        VerifyAccess();
+        _controller.SetPageSpacing(pageSpacing);
+    }
+
+    public void GoToPage(int pageIndex)
+    {
+        VerifyAccess();
+        _controller.GoToPage(pageIndex);
+        ScrollCurrentPageIntoView();
+    }
+
+    public bool MoveNext()
+    {
+        VerifyAccess();
+        var moved = _controller.MoveNext();
+        if (moved) ScrollCurrentPageIntoView();
+        return moved;
+    }
+
+    public bool MovePrevious()
+    {
+        VerifyAccess();
+        var moved = _controller.MovePrevious();
+        if (moved) ScrollCurrentPageIntoView();
+        return moved;
+    }
+
+    public void ReleaseDocument()
+    {
+        VerifyAccess();
+        _controller.ReleaseDocument();
+    }
+
+    /// <summary>Assigns or releases a document from any thread.</summary>
     public Task SetDocumentAsync(CetzRenderedDocument? document)
     {
         ThrowIfDisposed();
         if (DispatcherQueue.HasThreadAccess)
         {
-            Document = document;
+            if (document is null) ReleaseDocument(); else SetDocument(document);
             return Task.CompletedTask;
         }
 
@@ -94,32 +182,24 @@ public sealed class CetzView : Grid, IDisposable
             {
                 try
                 {
-                    ThrowIfDisposed();
-                    Document = document;
+                    if (document is null) ReleaseDocument(); else SetDocument(document);
                     completion.SetResult();
                 }
-                catch (Exception exception)
-                {
-                    completion.SetException(exception);
-                }
+                catch (Exception exception) { completion.SetException(exception); }
             }))
-        {
             completion.SetException(new InvalidOperationException("The WinUI dispatcher is shutting down."));
-        }
         return completion.Task;
     }
 
-    /// <summary>Releases page image sources and disconnects the view from its document.</summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-        if (!DispatcherQueue.HasThreadAccess)
-            throw new InvalidOperationException("CetzView must be disposed on its WinUI thread.");
-
+        if (_disposed) return;
+        VerifyAccess();
+        _controller.ReleaseDocument();
         _disposed = true;
-        ClearValue(DocumentProperty);
-        ClearPageImages();
+        _controller.Changed -= ControllerOnChanged;
+        _scrollViewer.SizeChanged -= ScrollViewerOnSizeChanged;
+        ClearPageResources();
         _scrollViewer.Content = null;
         Children.Clear();
         GC.SuppressFinalize(this);
@@ -128,116 +208,140 @@ public sealed class CetzView : Grid, IDisposable
     private static void OnDocumentChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var view = (CetzView)sender;
-        if (!view._disposed)
-            view.RebuildPageImages((CetzRenderedDocument?)args.NewValue);
+        if (view._syncingProperties || view._disposed) return;
+        if (args.NewValue is CetzRenderedDocument document) view._controller.SetDocument(document);
+        else view._controller.ReleaseDocument();
     }
 
-    private static void OnLayoutPropertyChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    private static void OnZoomChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var view = (CetzView)sender;
-        if (view._disposed)
-            return;
-
-        if (args.Property == ZoomProperty)
-        {
-            var normalized = WinUiLayout.NormalizeZoom((double)args.NewValue);
-            if (normalized != (double)args.NewValue)
-            {
-                view.SetValue(ZoomProperty, normalized);
-                return;
-            }
-        }
-        else
-        {
-            var normalized = WinUiLayout.NormalizeSpacing((double)args.NewValue);
-            if (normalized != (double)args.NewValue)
-            {
-                view.SetValue(PageSpacingProperty, normalized);
-                return;
-            }
-        }
-        view.ApplyPageLayout();
+        if (!view._syncingProperties && !view._disposed) view._controller.SetZoom((double)args.NewValue);
     }
 
-    private void RebuildPageImages(CetzRenderedDocument? document)
+    private static void OnZoomModeChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
-        ClearPageImages();
-        if (document is null)
-            return;
+        var view = (CetzView)sender;
+        if (!view._syncingProperties && !view._disposed) view._controller.SetZoomMode((CetzZoomMode)args.NewValue);
+    }
 
+    private static void OnViewModeChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)sender;
+        if (view._syncingProperties || view._disposed) return;
+        view._controller.SetViewMode((CetzPageViewMode)args.NewValue);
+        view.ScrollCurrentPageIntoView();
+    }
+
+    private static void OnPageSpacingChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)sender;
+        if (!view._syncingProperties && !view._disposed) view._controller.SetPageSpacing((double)args.NewValue);
+    }
+
+    private void ControllerOnChanged(object? sender, EventArgs args)
+    {
+        SyncDependencyProperties();
+        ApplyLayout();
+    }
+
+    private void SyncDependencyProperties()
+    {
+        _syncingProperties = true;
         try
         {
-            foreach (var page in document.Pages)
-            {
-                var bitmap = new WriteableBitmap(page.PixelWidth, page.PixelHeight);
-                using (var stream = bitmap.PixelBuffer.AsStream())
-                {
-                    WinUiPixelBuffer.WriteBgraPremultiplied(page, stream);
-                }
-                bitmap.Invalidate();
-
-                var image = new Image
-                {
-                    Source = bitmap,
-                    Stretch = Stretch.Fill,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                };
-                _imageSources.Add(bitmap);
-                _pageImages.Add(image);
-                _pagePanel.Children.Add(image);
-            }
-            ApplyPageLayout();
+            SetValue(DocumentProperty, _controller.Document);
+            SetValue(ZoomProperty, _controller.Zoom);
+            SetValue(ZoomModeProperty, _controller.ZoomMode);
+            SetValue(ViewModeProperty, _controller.ViewMode);
+            SetValue(PageSpacingProperty, _controller.PageSpacing);
         }
-        catch
-        {
-            ClearPageImages();
-            throw;
-        }
+        finally { _syncingProperties = false; }
     }
 
-    private void ApplyPageLayout()
+    private void ApplyLayout()
     {
-        var document = Document;
-        if (document is null || document.Pages.Count != _pageImages.Count)
+        var document = _controller.Document;
+        var layout = _controller.Layout;
+        if (document is null)
+        {
+            ClearPageResources();
+            _pageCanvas.Width = 0;
+            _pageCanvas.Height = 0;
             return;
+        }
 
-        var zoom = WinUiLayout.NormalizeZoom(Zoom);
-        var spacing = WinUiLayout.NormalizeSpacing(PageSpacing);
-        for (var index = 0; index < _pageImages.Count; index++)
+        _pageResources.RetainOnly(layout.Pages.Select(page => page.PageIndex));
+
+        _pageCanvas.Children.Clear();
+        _pageCanvas.Width = layout.ExtentWidth;
+        _pageCanvas.Height = layout.ExtentHeight;
+        foreach (var placement in layout.Pages)
         {
-            var page = document.Pages[index];
-            var image = _pageImages[index];
-            image.Width = page.Width * zoom;
-            image.Height = page.Height * zoom;
-            image.Margin = new Thickness(0, 0, 0, index + 1 < _pageImages.Count ? spacing : 0);
+            var resource = _pageResources.GetOrAdd(placement.PageIndex,
+                pageIndex => WinUiPageResource.Create(document.Pages[pageIndex]));
+            resource.Image.Width = placement.Width;
+            resource.Image.Height = placement.Height;
+            Canvas.SetLeft(resource.Image, placement.X);
+            Canvas.SetTop(resource.Image, placement.Y);
+            _pageCanvas.Children.Add(resource.Image);
         }
     }
 
-    private void ClearPageImages()
+    private void ScrollViewerOnSizeChanged(object sender, SizeChangedEventArgs args)
     {
-        foreach (var image in _pageImages)
-            image.Source = null;
-        _pagePanel.Children.Clear();
-        _pageImages.Clear();
-        foreach (var source in _imageSources)
-        {
-            if (source is IDisposable disposable)
-                disposable.Dispose();
-        }
-        _imageSources.Clear();
+        var width = _scrollViewer.ViewportWidth;
+        var height = _scrollViewer.ViewportHeight;
+        _controller.SetViewport(width, height);
     }
 
-    private void ThrowIfDisposed()
+    private void ScrollCurrentPageIntoView()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        var placement = _controller.Layout.Pages.FirstOrDefault(
+            page => page.PageIndex == _controller.CurrentPageIndex);
+        if (!_controller.Layout.Pages.Any(page => page.PageIndex == _controller.CurrentPageIndex))
+            return;
+        _scrollViewer.UpdateLayout();
+        _scrollViewer.ChangeView(placement.X, placement.Y, null, true);
     }
+
+    private void ClearPageResources()
+    {
+        _pageCanvas.Children.Clear();
+        _pageResources.Clear();
+    }
+
+    private void VerifyAccess()
+    {
+        ThrowIfDisposed();
+        if (!DispatcherQueue.HasThreadAccess)
+            throw new InvalidOperationException("CetzView must be accessed on its WinUI thread. Use SetDocumentAsync for background rendering.");
+    }
+
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 }
 
-internal static class WinUiLayout
+internal sealed class WinUiPageResource : IDisposable
 {
-    public static double NormalizeZoom(double value)
-        => double.IsFinite(value) ? Math.Clamp(value, 0.1d, 8d) : 1d;
+    private object? _source;
 
-    public static double NormalizeSpacing(double value)
-        => double.IsFinite(value) ? Math.Max(0d, value) : 24d;
+    private WinUiPageResource(Image image, object source) => (Image, _source) = (image, source);
+
+    public Image Image { get; }
+
+    public static WinUiPageResource Create(CetzRenderedPage page)
+    {
+        var bitmap = new WriteableBitmap(page.PixelWidth, page.PixelHeight);
+        using (var stream = bitmap.PixelBuffer.AsStream())
+            WinUiPixelBuffer.WriteBgraPremultiplied(page, stream);
+        bitmap.Invalidate();
+        return new WinUiPageResource(new Image { Source = bitmap, Stretch = Stretch.Fill }, bitmap);
+    }
+
+    public void Dispose()
+    {
+        Image.Source = null;
+        if (_source is IDisposable disposable) disposable.Dispose();
+        _source = null;
+    }
 }
