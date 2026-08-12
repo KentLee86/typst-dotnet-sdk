@@ -32,6 +32,20 @@ public sealed class RenderControllerTests
         Assert.NotNull(controller.LastError);
     }
 
+    [Fact]
+    public async Task StateObserverFailureDoesNotLeaveControllerBusy()
+    {
+        var view = new TestView();
+        using var controller = new CetzRenderController(view, RendererOptions());
+        controller.StateChanged += (_, _) => throw new InvalidOperationException("observer");
+
+        var document = await controller.RenderSourceAsync(
+            "Still renders", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.NotNull(document);
+        Assert.False(controller.IsRendering);
+    }
+
     private static CetzRendererOptions RendererOptions() => new()
     {
         NativeLibraryPath = NativePath(),
