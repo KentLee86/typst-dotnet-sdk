@@ -3,13 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cetz.Renderer.Core;
 
 namespace Cetz.Renderer.Avalonia;
 
 /// <summary>Displays every page of a UI-neutral CeTZ rendered document.</summary>
-public sealed class CetzView : Control
+public sealed class CetzView : Control, ICetzDocumentView, IDisposable
 {
     public static readonly StyledProperty<CetzRenderedDocument?> DocumentProperty =
         AvaloniaProperty.Register<CetzView, CetzRenderedDocument?>(nameof(Document));
@@ -18,14 +19,23 @@ public sealed class CetzView : Control
         AvaloniaProperty.Register<CetzView, double>(nameof(Zoom), 1d, coerce: CoerceZoom);
 
     public static readonly StyledProperty<double> PageSpacingProperty =
-        AvaloniaProperty.Register<CetzView, double>(nameof(PageSpacing), 24d);
+        AvaloniaProperty.Register<CetzView, double>(nameof(PageSpacing), CetzDocumentViewController.DefaultPageSpacing,
+            coerce: (_, value) => CetzDocumentViewController.NormalizePageSpacing(value));
+
+    public static readonly StyledProperty<CetzZoomMode> ZoomModeProperty =
+        AvaloniaProperty.Register<CetzView, CetzZoomMode>(nameof(ZoomMode));
+
+    public static readonly StyledProperty<CetzPageViewMode> ViewModeProperty =
+        AvaloniaProperty.Register<CetzView, CetzPageViewMode>(nameof(ViewMode));
 
     private readonly List<Bitmap> _bitmaps = [];
+    private readonly CetzDocumentViewController _controller = new();
+    private bool _disposed;
 
     static CetzView()
     {
-        AffectsMeasure<CetzView>(DocumentProperty, ZoomProperty, PageSpacingProperty);
-        AffectsRender<CetzView>(DocumentProperty, ZoomProperty, PageSpacingProperty);
+        AffectsMeasure<CetzView>(DocumentProperty, ZoomProperty, PageSpacingProperty, ZoomModeProperty, ViewModeProperty);
+        AffectsRender<CetzView>(DocumentProperty, ZoomProperty, PageSpacingProperty, ZoomModeProperty, ViewModeProperty);
     }
 
     public CetzRenderedDocument? Document
@@ -36,33 +46,76 @@ public sealed class CetzView : Control
 
     public double Zoom
     {
-        get => GetValue(ZoomProperty);
+        get => _controller.Zoom;
         set => SetValue(ZoomProperty, value);
     }
 
     public double PageSpacing
     {
-        get => GetValue(PageSpacingProperty);
+        get => _controller.PageSpacing;
         set => SetValue(PageSpacingProperty, value);
     }
+
+    public CetzZoomMode ZoomMode
+    {
+        get => _controller.ZoomMode;
+        set => SetValue(ZoomModeProperty, value);
+    }
+
+    public CetzPageViewMode ViewMode
+    {
+        get => _controller.ViewMode;
+        set => SetValue(ViewModeProperty, value);
+    }
+
+    public int CurrentPageIndex => _controller.CurrentPageIndex;
+    public int PageCount => _controller.PageCount;
+    public CetzDocumentViewLayout Layout => _controller.Layout;
+
+    public void SetDocument(CetzRenderedDocument document) => Document = document;
+    public void SetZoom(double zoom) => Zoom = zoom;
+    public void SetZoomMode(CetzZoomMode mode) => ZoomMode = mode;
+    public void SetViewMode(CetzPageViewMode mode) => ViewMode = mode;
+    public void SetViewport(double width, double height)
+    {
+        _controller.SetViewport(width, height);
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+    public void SetPageSpacing(double pageSpacing) => PageSpacing = pageSpacing;
+    public void GoToPage(int pageIndex) { _controller.GoToPage(pageIndex); NavigationChanged(); }
+    public bool MoveNext() { var changed = _controller.MoveNext(); if (changed) NavigationChanged(); return changed; }
+    public bool MovePrevious() { var changed = _controller.MovePrevious(); if (changed) NavigationChanged(); return changed; }
+    public void ReleaseDocument() => Document = null;
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (change.Property == DocumentProperty)
+        {
+            var document = change.GetNewValue<CetzRenderedDocument?>();
+            if (document is null) _controller.ReleaseDocument(); else _controller.SetDocument(document);
             RebuildBitmaps();
+        }
+        else if (change.Property == ZoomProperty)
+        {
+            _controller.SetZoom(change.GetNewValue<double>());
+        }
+        else if (change.Property == PageSpacingProperty)
+        {
+            _controller.SetPageSpacing(change.GetNewValue<double>());
+        }
+        else if (change.Property == ZoomModeProperty)
+        {
+            _controller.SetZoomMode(change.GetNewValue<CetzZoomMode>());
+        }
+        else if (change.Property == ViewModeProperty)
+            _controller.SetViewMode(change.GetNewValue<CetzPageViewMode>());
     }
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var document = Document;
-        if (document is null || document.Pages.Count == 0)
-            return default;
-
-        var width = document.Pages.Max(page => page.Width) * Zoom;
-        var height = document.Pages.Sum(page => page.Height) * Zoom +
-            Math.Max(0, document.Pages.Count - 1) * PageSpacing;
-        return new Size(width, height);
+        return new Size(Layout.ExtentWidth, Layout.ExtentHeight);
     }
 
     public override void Render(DrawingContext context)
@@ -72,16 +125,13 @@ public sealed class CetzView : Control
         if (document is null || _bitmaps.Count != document.Pages.Count)
             return;
 
-        var y = 0d;
-        for (var index = 0; index < document.Pages.Count; index++)
+        foreach (var placement in Layout.Pages)
         {
-            var page = document.Pages[index];
-            var size = new Size(page.Width * Zoom, page.Height * Zoom);
+            var page = document.Pages[placement.PageIndex];
             context.DrawImage(
-                _bitmaps[index],
+                _bitmaps[placement.PageIndex],
                 new Rect(0, 0, page.PixelWidth, page.PixelHeight),
-                new Rect(new Point(0, y), size));
-            y += size.Height + PageSpacing;
+                new Rect(placement.X, placement.Y, placement.Width, placement.Height));
         }
     }
 
@@ -96,6 +146,15 @@ public sealed class CetzView : Control
     {
         DisposeBitmaps();
         base.OnDetachedFromVisualTree(e);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        ReleaseDocument();
+        DisposeBitmaps();
+        GC.SuppressFinalize(this);
     }
 
     private unsafe void RebuildBitmaps()
@@ -138,5 +197,16 @@ public sealed class CetzView : Control
     }
 
     private static double CoerceZoom(AvaloniaObject owner, double value)
-        => double.IsFinite(value) ? Math.Clamp(value, 0.1, 8) : 1;
+        => CetzDocumentViewController.NormalizeZoom(value);
+
+    private void NavigationChanged()
+    {
+        InvalidateMeasure();
+        InvalidateVisual();
+        var placement = Layout.Pages.FirstOrDefault(page => page.PageIndex == CurrentPageIndex);
+        if (placement.Width <= 0 || placement.Height <= 0) return;
+        Dispatcher.UIThread.Post(() => ControlExtensions.BringIntoView(this,
+            new Rect(placement.X, placement.Y, placement.Width, placement.Height)));
+    }
+
 }
