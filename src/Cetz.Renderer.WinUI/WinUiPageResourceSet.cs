@@ -6,6 +6,7 @@ internal sealed class WinUiPageResourceSet<T> where T : IDisposable
     private readonly Dictionary<int, T> _resources = [];
 
     public int Count => _resources.Count;
+    public IReadOnlyCollection<int> PageIndices => _resources.Keys.Order().ToArray();
 
     public T GetOrAdd(int pageIndex, Func<int, T> factory)
     {

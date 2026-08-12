@@ -95,6 +95,18 @@ public sealed class CetzDocumentViewController
         RebuildLayout();
     }
 
+    /// <summary>Updates continuous-view navigation state without requesting a scroll.</summary>
+    public bool TrackCurrentPage(int pageIndex)
+    {
+        if (_viewMode is CetzPageViewMode.SinglePage or CetzPageViewMode.FacingPages)
+            return false;
+        var normalized = SpreadStart(ClampPage(pageIndex));
+        if (_currentPageIndex == normalized) return false;
+        _currentPageIndex = normalized;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     public bool MoveNext() => MoveBy(IsFacing ? 2 : 1);
     public bool MovePrevious() => MoveBy(IsFacing ? -2 : -1);
 

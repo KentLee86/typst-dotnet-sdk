@@ -66,9 +66,16 @@ public sealed class MainWindow : Window
         SelectedItem = CetzPageViewMode.ContinuousSingle,
         MinWidth = 150
     };
+    private readonly ComboBox _qualityPicker = new()
+    {
+        ItemsSource = RasterQualityChoices,
+        SelectedIndex = 2,
+        MinWidth = 150
+    };
     private readonly Button _previousButton = new() { Content = "Previous", Padding = new Thickness(12, 5, 12, 5) };
     private readonly Button _nextButton = new() { Content = "Next", Padding = new Thickness(12, 5, 12, 5) };
-    private readonly TextBlock _pageIndicator = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 72, TextAlignment = TextAlignment.Center };
+    private readonly TextBox _pageInput = new() { Text = "1", Width = 52, TextAlignment = TextAlignment.Center };
+    private readonly TextBlock _pageIndicator = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 52, TextAlignment = TextAlignment.Center };
     private readonly ScrollViewer _preview = new()
     {
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -78,6 +85,8 @@ public sealed class MainWindow : Window
     };
     private bool _opened;
     private bool _closing;
+    private bool _syncingPageInput;
+    private readonly DispatcherTimer _qualityTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
 
     public MainWindow()
     {
@@ -104,6 +113,10 @@ public sealed class MainWindow : Window
         _renderButton.Click += RenderClicked;
         _zoomModePicker.SelectionChanged += ZoomModeSelectionChanged;
         _viewModePicker.SelectionChanged += ViewModeSelectionChanged;
+        _qualityPicker.SelectionChanged += QualitySelectionChanged;
+        _qualityTimer.Tick += QualityTimerTick;
+        _pageInput.KeyDown += PageInputKeyDown;
+        _pageInput.LostFocus += (_, _) => NavigateFromPageInput();
         _previousButton.Click += PreviousClicked;
         _nextButton.Click += NextClicked;
         _preview.Content = _view;
@@ -171,8 +184,11 @@ public sealed class MainWindow : Window
         previewToolbar.Children.Add(_zoomModePicker);
         previewToolbar.Children.Add(new TextBlock { Text = "View", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 6, 0) });
         previewToolbar.Children.Add(_viewModePicker);
+        previewToolbar.Children.Add(new TextBlock { Text = "Quality", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 6, 0) });
+        previewToolbar.Children.Add(_qualityPicker);
         _previousButton.Margin = new Thickness(14, 0, 4, 0);
         previewToolbar.Children.Add(_previousButton);
+        previewToolbar.Children.Add(_pageInput);
         previewToolbar.Children.Add(_pageIndicator);
         previewToolbar.Children.Add(_nextButton);
 
@@ -247,6 +263,7 @@ public sealed class MainWindow : Window
     {
         if (args.ViewportWidthChange != 0 || args.ViewportHeightChange != 0)
             UpdateViewport();
+        UpdateVisibleRegion();
     }
 
     private void UpdateViewport()
@@ -254,6 +271,7 @@ public sealed class MainWindow : Window
         var width = _preview.ViewportWidth > 0 ? _preview.ViewportWidth : _preview.ActualWidth;
         var height = _preview.ViewportHeight > 0 ? _preview.ViewportHeight : _preview.ActualHeight;
         _view.SetViewport(width, height);
+        UpdateVisibleRegion();
     }
 
     private void BeginPan(object sender, MouseButtonEventArgs args)
@@ -295,6 +313,7 @@ public sealed class MainWindow : Window
             _preview.ScrollToVerticalOffset(offset.Y);
         }, DispatcherPriority.Loaded);
         UpdatePageIndicator();
+        ScheduleAutomaticQualityRefresh();
         args.Handled = true;
     }
 
@@ -310,14 +329,18 @@ public sealed class MainWindow : Window
         {
             var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text),
-                new CetzDocumentRenderOptions { Ppi = 144 });
+                new CetzDocumentRenderOptions
+                {
+                    Ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _view.Zoom)
+                });
             if (_closing || document is null)
                 return;
 
             UpdatePageIndicator();
-            _status.Text = $"{demo.DisplayName} · {document.Pages.Count} page(s) · {document.Timing.TotalMilliseconds:F0} ms";
+            _status.Text = $"{demo.DisplayName} · {document.Pages.Count} page(s) · {document.Ppi:F0} PPI · {document.Timing.TotalMilliseconds:F0} ms";
             _status.Foreground = SuccessBrush;
             Title = $"Cetz.Renderer WPF Sample — {_status.Text} · Typst {document.TypstVersion}";
+            ScheduleAutomaticQualityRefresh();
         }
         catch (Exception exception)
         {
@@ -347,6 +370,7 @@ public sealed class MainWindow : Window
     private void WindowClosing(object? sender, CancelEventArgs args)
     {
         _closing = true;
+        _qualityTimer.Stop();
         _renderController.Cancel();
     }
 
@@ -359,9 +383,81 @@ public sealed class MainWindow : Window
     private void UpdatePageIndicator()
     {
         var count = _view.PageCount;
-        _pageIndicator.Text = count == 0 ? "0 / 0" : $"{_view.CurrentPageIndex + 1} / {count}";
+        _syncingPageInput = true;
+        try
+        {
+            _pageInput.Text = Math.Max(1, _view.CurrentPageIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _pageInput.IsEnabled = count > 0;
+        }
+        finally { _syncingPageInput = false; }
+        _pageIndicator.Text = $"/ {count}";
         _previousButton.IsEnabled = count > 0 && _view.CurrentPageIndex > 0;
         _nextButton.IsEnabled = count > 0 && _view.CurrentPageIndex < count - 1;
+    }
+
+    private void PageInputKeyDown(object sender, KeyEventArgs args)
+    {
+        if (args.Key != Key.Enter) return;
+        NavigateFromPageInput();
+        args.Handled = true;
+    }
+
+    private void NavigateFromPageInput()
+    {
+        if (_syncingPageInput || _view.PageCount == 0) return;
+        if (int.TryParse(_pageInput.Text, out var pageNumber))
+            _view.GoToPage(Math.Clamp(pageNumber, 1, _view.PageCount) - 1);
+        UpdatePageIndicator();
+    }
+
+    private void UpdateVisibleRegion()
+    {
+        var region = new Rect(
+            _preview.HorizontalOffset - _view.Margin.Left,
+            _preview.VerticalOffset - _view.Margin.Top,
+            _preview.ViewportWidth,
+            _preview.ViewportHeight);
+        _view.SetVisibleRegion(region);
+        var current = CetzVisiblePageSelector.SelectCurrentPage(
+            _view.Layout, region.X, region.Y, region.Width, region.Height);
+        if (current is { } selected && _view.TrackCurrentPage(selected))
+            UpdatePageIndicator();
+    }
+
+    private CetzRasterQualityMode SelectedQualityMode =>
+        (_qualityPicker.SelectedItem as RasterQualityChoice)?.Mode ?? CetzRasterQualityMode.Automatic;
+
+    private async void QualitySelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        _qualityTimer.Stop();
+        if (_opened) await RenderAsync();
+    }
+
+    private async void QualityTimerTick(object? sender, EventArgs args)
+    {
+        _qualityTimer.Stop();
+        if (_opened) await RenderAsync();
+    }
+
+    private void ScheduleAutomaticQualityRefresh()
+    {
+        if (!_opened || SelectedQualityMode != CetzRasterQualityMode.Automatic) return;
+        var ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _view.Zoom);
+        if (_view.Document is { } document && Math.Abs(document.Ppi - ppi) < 0.5f) return;
+        _qualityTimer.Stop();
+        _qualityTimer.Start();
+    }
+
+    private static readonly RasterQualityChoice[] RasterQualityChoices =
+    [
+        new(CetzRasterQualityMode.Fixed, "Fixed · 144 PPI"),
+        new(CetzRasterQualityMode.HighResolution, "High · 288 PPI"),
+        new(CetzRasterQualityMode.Automatic, "Automatic")
+    ];
+
+    private sealed record RasterQualityChoice(CetzRasterQualityMode Mode, string Label)
+    {
+        public override string ToString() => Label;
     }
 
     private static string ResolveNativeLibrary()

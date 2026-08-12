@@ -16,6 +16,8 @@ public sealed partial class MainPage : Page
     private readonly CetzViewportInteractionController _viewportInteraction;
     private bool _loaded;
     private bool _disposed;
+    private bool _syncingPageInput;
+    private CancellationTokenSource? _qualityRefresh;
 
     public MainPage()
     {
@@ -27,7 +29,7 @@ public sealed partial class MainPage : Page
         PreviewScroller.PointerCaptureLost += OnPointerCaptureLost;
         PreviewScroller.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(ZoomWithWheel), true);
         DemoPicker.ItemsSource = CetzDemoCatalog.All;
-        DemoPicker.SelectedIndex = 0;
+        DemoPicker.SelectedIndex = 6;
         LoadSelectedDemo();
         DemoPicker.SelectionChanged += OnDemoSelectionChanged;
         Loaded += OnLoaded;
@@ -40,6 +42,7 @@ public sealed partial class MainPage : Page
             return;
 
         _disposed = true;
+        CancelQualityRefresh();
         Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
         DemoPicker.SelectionChanged -= OnDemoSelectionChanged;
@@ -61,6 +64,15 @@ public sealed partial class MainPage : Page
     private async void OnLoaded(object sender, RoutedEventArgs args)
     {
         _loaded = true;
+        if (Application.Current is App app && app.MainWindow is { } window)
+        {
+            var scale = XamlRoot?.RasterizationScale ?? 1d;
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32
+            {
+                Width = checked((int)Math.Round(1280 * scale)),
+                Height = checked((int)Math.Round(820 * scale))
+            });
+        }
         Preview.SetViewport(
             Math.Max(0, PreviewScroller.ActualWidth - 56),
             Math.Max(0, PreviewScroller.ActualHeight - 56));
@@ -98,6 +110,7 @@ public sealed partial class MainPage : Page
         if (ZoomModePicker is not null)
             ZoomModePicker.SelectedIndex = 0;
         UpdateViewStatus();
+        ScheduleAutomaticQualityRefresh();
     }
 
     private void OnZoomModeChanged(object sender, SelectionChangedEventArgs args)
@@ -150,7 +163,11 @@ public sealed partial class MainPage : Page
 
         Preview.SetViewport(Math.Max(0, args.NewSize.Width - 56), Math.Max(0, args.NewSize.Height - 56));
         UpdateViewStatus();
+        ScheduleAutomaticQualityRefresh();
+        UpdateVisibleRegion();
     }
+
+    private void OnPreviewViewChanged(object sender, ScrollViewerViewChangedEventArgs args) => UpdateVisibleRegion();
 
     private void BeginPan(object sender, PointerRoutedEventArgs args)
     {
@@ -208,6 +225,7 @@ public sealed partial class MainPage : Page
         ZoomSlider.Value = Preview.Zoom;
         PreviewScroller.ChangeView(offset.X, offset.Y, null, true);
         UpdateViewStatus();
+        ScheduleAutomaticQualityRefresh();
         args.Handled = true;
     }
 
@@ -217,9 +235,14 @@ public sealed partial class MainPage : Page
             return;
 
         ZoomText.Text = $"{Preview.Zoom:P0}";
-        PageIndicator.Text = Preview.PageCount == 0
-            ? "0 / 0"
-            : $"{Preview.CurrentPageIndex + 1} / {Preview.PageCount}";
+        PageIndicator.Text = $"/ {Preview.PageCount}";
+        _syncingPageInput = true;
+        try
+        {
+            PageInput.Text = Math.Max(1, Preview.CurrentPageIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            PageInput.IsEnabled = Preview.PageCount > 0;
+        }
+        finally { _syncingPageInput = false; }
     }
 
     private async Task RenderAsync()
@@ -235,15 +258,20 @@ public sealed partial class MainPage : Page
         {
             var document = await controller.RenderProjectAsync(
                 demo.CreateProject(SourceEditor.Text ?? string.Empty),
-                new CetzDocumentRenderOptions { Ppi = 144 });
+                new CetzDocumentRenderOptions
+                {
+                    Ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, Preview.Zoom)
+                });
 
             if (_disposed || document is null)
                 return;
 
             UpdateViewStatus();
+            UpdateVisibleRegion();
             var milliseconds = document.Timing.TotalMilliseconds;
             StatusText.Text = $"{document.Pages.Count} page(s) · {milliseconds:F1} ms · {document.Ppi:F0} DPI";
             StatusText.Foreground = new SolidColorBrush(Colors.SeaGreen);
+            ScheduleAutomaticQualityRefresh();
         }
         catch (Exception exception)
         {
@@ -276,6 +304,76 @@ public sealed partial class MainPage : Page
     {
         if (!_disposed && _renderController is not null)
             RenderButton.IsEnabled = !_renderController.IsRendering;
+    }
+
+    private void OnPageInputKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Enter) return;
+        NavigateFromPageInput();
+        args.Handled = true;
+    }
+
+    private void OnPageInputLostFocus(object sender, RoutedEventArgs args) => NavigateFromPageInput();
+
+    private void NavigateFromPageInput()
+    {
+        if (_syncingPageInput || Preview.PageCount == 0) return;
+        if (int.TryParse(PageInput.Text, out var pageNumber))
+            Preview.GoToPage(Math.Clamp(pageNumber, 1, Preview.PageCount) - 1);
+        UpdateViewStatus();
+    }
+
+    private void UpdateVisibleRegion()
+    {
+        if (Preview.PageCount == 0) return;
+        var x = PreviewScroller.HorizontalOffset - 28;
+        var y = PreviewScroller.VerticalOffset - 28;
+        Preview.SetVisibleRegion(x, y, PreviewScroller.ViewportWidth, PreviewScroller.ViewportHeight);
+        var current = CetzVisiblePageSelector.SelectCurrentPage(
+            Preview.Layout, x, y, PreviewScroller.ViewportWidth, PreviewScroller.ViewportHeight);
+        if (current is { } selected && Preview.TrackCurrentPage(selected))
+            UpdateViewStatus();
+    }
+
+    private CetzRasterQualityMode SelectedQualityMode => QualityPicker.SelectedIndex switch
+    {
+        0 => CetzRasterQualityMode.Fixed,
+        1 => CetzRasterQualityMode.HighResolution,
+        _ => CetzRasterQualityMode.Automatic
+    };
+
+    private async void OnQualityChanged(object sender, SelectionChangedEventArgs args)
+    {
+        CancelQualityRefresh();
+        if (_loaded) await RenderAsync();
+    }
+
+    private async void ScheduleAutomaticQualityRefresh()
+    {
+        if (!_loaded || _disposed || SelectedQualityMode != CetzRasterQualityMode.Automatic) return;
+        var ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, Preview.Zoom);
+        if (Preview.Document is { } document && Math.Abs(document.Ppi - ppi) < 0.5f) return;
+        CancelQualityRefresh();
+        var cancellation = new CancellationTokenSource();
+        _qualityRefresh = cancellation;
+        try
+        {
+            await Task.Delay(180, cancellation.Token);
+            if (!cancellation.IsCancellationRequested) await RenderAsync();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally
+        {
+            if (ReferenceEquals(_qualityRefresh, cancellation)) _qualityRefresh = null;
+            cancellation.Dispose();
+        }
+    }
+
+    private void CancelQualityRefresh()
+    {
+        var cancellation = _qualityRefresh;
+        _qualityRefresh = null;
+        cancellation?.Cancel();
     }
 
     private static string ResolveNativeLibrary()

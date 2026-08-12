@@ -41,6 +41,7 @@ public sealed class CetzViewport : Grid, IDisposable
         Background = Brushes.Transparent;
         Children.Add(_scrollViewer);
         _scrollViewer.SizeChanged += OnViewportSizeChanged;
+        _scrollViewer.ScrollChanged += OnScrollChanged;
         _scrollViewer.LayoutUpdated += OnLayoutUpdated;
         _scrollViewer.PointerPressed += BeginPan;
         _scrollViewer.PointerMoved += ContinuePan;
@@ -56,6 +57,7 @@ public sealed class CetzViewport : Grid, IDisposable
     public Size Viewport => _scrollViewer.Viewport;
 
     public event EventHandler? ZoomChanged;
+    public event EventHandler? CurrentPageChanged;
 
     internal Point DocumentOrigin => new(_workspace.Padding.Left, _workspace.Padding.Top);
 
@@ -64,6 +66,7 @@ public sealed class CetzViewport : Grid, IDisposable
         if (_disposed) return;
         _disposed = true;
         _scrollViewer.SizeChanged -= OnViewportSizeChanged;
+        _scrollViewer.ScrollChanged -= OnScrollChanged;
         _scrollViewer.LayoutUpdated -= OnLayoutUpdated;
         _scrollViewer.PointerPressed -= BeginPan;
         _scrollViewer.PointerMoved -= ContinuePan;
@@ -117,6 +120,8 @@ public sealed class CetzViewport : Grid, IDisposable
 
     private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args) => _interaction.EndPan();
 
+    private void OnScrollChanged(object? sender, ScrollChangedEventArgs args) => UpdateVisibleRegion();
+
     private void ZoomWithWheel(object? sender, PointerWheelEventArgs args)
     {
         if (!args.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
@@ -145,8 +150,25 @@ public sealed class CetzViewport : Grid, IDisposable
                 Math.Max(0, Offset.Y + shiftY));
         }
 
-        if (_pendingZoomOffset is not { } offset) return;
-        _pendingZoomOffset = null;
-        Offset = new Vector(offset.X, offset.Y);
+        if (_pendingZoomOffset is { } offset)
+        {
+            _pendingZoomOffset = null;
+            Offset = new Vector(offset.X, offset.Y);
+        }
+        UpdateVisibleRegion();
+    }
+
+    private void UpdateVisibleRegion()
+    {
+        var region = new Rect(
+            Offset.X - _workspace.Padding.Left,
+            Offset.Y - _workspace.Padding.Top,
+            Viewport.Width,
+            Viewport.Height);
+        View.SetVisibleRegion(region);
+        var pageIndex = CetzVisiblePageSelector.SelectCurrentPage(
+            View.Layout, region.X, region.Y, region.Width, region.Height);
+        if (pageIndex is { } selected && View.TrackCurrentPage(selected))
+            CurrentPageChanged?.Invoke(this, EventArgs.Empty);
     }
 }

@@ -5,6 +5,7 @@ namespace Cetz.Renderer.WinForms.Sample;
 
 public sealed class MainForm : Form
 {
+    private static readonly Size InitialLogicalWindowSize = new(1280, 820);
     private readonly CetzRendererOptions _rendererOptions;
     private readonly CetzViewportInteractionController _viewportInteraction;
     private CetzRenderController? _renderController;
@@ -52,6 +53,11 @@ public sealed class MainForm : Form
     };
     private readonly ComboBox _zoomModePicker = CreateEnumPicker();
     private readonly ComboBox _viewModePicker = CreateEnumPicker();
+    private readonly ComboBox _qualityPicker = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 150
+    };
     private readonly NumericUpDown _zoom = new()
     {
         DecimalPlaces = 2,
@@ -63,13 +69,16 @@ public sealed class MainForm : Form
     };
     private readonly Button _previousButton = new() { AutoSize = true, Text = "◀ 이전" };
     private readonly Button _nextButton = new() { AutoSize = true, Text = "다음 ▶" };
+    private readonly NumericUpDown _pageInput = new() { Minimum = 1, Maximum = 1, Value = 1, Width = 56 };
     private readonly Label _pageIndicator = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleCenter };
+    private readonly System.Windows.Forms.Timer _qualityTimer = new() { Interval = 180 };
+    private bool _syncingPageInput;
     private bool _opened;
 
     public MainForm()
     {
         Text = "Cetz.Renderer WinForms Sample";
-        ClientSize = new Size(1280, 820);
+        Size = InitialLogicalWindowSize;
         MinimumSize = new Size(900, 600);
         BackColor = Color.FromArgb(238, 242, 247);
 
@@ -87,13 +96,16 @@ public sealed class MainForm : Form
             if (!_preview.Capture) _viewportInteraction.EndPan();
         };
         _preview.MouseWheel += ZoomWithWheel;
+        _preview.CurrentPageChanged += (_, _) => UpdateNavigation();
 
         _demoPicker.SelectedIndexChanged += DemoPicker_SelectedIndexChanged;
         _renderButton.Click += async (_, _) => await RenderAsync();
         _zoomModePicker.Items.AddRange(Enum.GetValues<CetzZoomMode>().Cast<object>().ToArray());
         _viewModePicker.Items.AddRange(Enum.GetValues<CetzPageViewMode>().Cast<object>().ToArray());
+        _qualityPicker.Items.AddRange(RasterQualityChoices.Cast<object>().ToArray());
         _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
         _viewModePicker.SelectedItem = CetzPageViewMode.ContinuousSingle;
+        _qualityPicker.SelectedIndex = 2;
         _zoomModePicker.SelectedIndexChanged += (_, _) =>
         {
             if (_zoomModePicker.SelectedItem is CetzZoomMode mode)
@@ -112,6 +124,23 @@ public sealed class MainForm : Form
         {
             _preview.SetZoom((double)_zoom.Value);
             _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
+            ScheduleAutomaticQualityRefresh();
+        };
+        _qualityPicker.SelectedIndexChanged += async (_, _) =>
+        {
+            _qualityTimer.Stop();
+            if (_opened) await RenderAsync();
+        };
+        _qualityTimer.Tick += async (_, _) =>
+        {
+            _qualityTimer.Stop();
+            if (_opened) await RenderAsync();
+        };
+        _pageInput.ValueChanged += (_, _) =>
+        {
+            if (_syncingPageInput || _preview.PageCount == 0) return;
+            _preview.GoToPage((int)_pageInput.Value - 1);
+            UpdateNavigation();
         };
         _previousButton.Click += (_, _) => { _preview.MovePrevious(); UpdateNavigation(); };
         _nextButton.Click += (_, _) => { _preview.MoveNext(); UpdateNavigation(); };
@@ -124,12 +153,14 @@ public sealed class MainForm : Form
         };
         FormClosed += (_, _) =>
         {
+            _qualityTimer.Stop();
+            _qualityTimer.Dispose();
             _renderController?.Dispose();
         };
 
         _demoPicker.Items.AddRange(CetzDemoCatalog.All.Cast<object>().ToArray());
         Controls.Add(BuildLayout());
-        _demoPicker.SelectedIndex = 1;
+        _demoPicker.SelectedIndex = 6;
         SelectDemo();
     }
 
@@ -224,7 +255,10 @@ public sealed class MainForm : Form
             _zoom,
             new Label { AutoSize = true, Margin = new Padding(12, 8, 3, 3), Text = "보기:" },
             _viewModePicker,
+            new Label { AutoSize = true, Margin = new Padding(12, 8, 3, 3), Text = "품질:" },
+            _qualityPicker,
             _previousButton,
+            _pageInput,
             _pageIndicator,
             _nextButton
         ]);
@@ -256,16 +290,20 @@ public sealed class MainForm : Form
         {
             var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text),
-                options: new CetzDocumentRenderOptions { Ppi = 144 });
+                options: new CetzDocumentRenderOptions
+                {
+                    Ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _preview.Zoom)
+                });
 
             if (IsDisposed || document is null)
                 return;
             UpdateNavigation();
             var summary = $"{demo.DisplayName} · {demo.Paths.Count} file(s) · {document.Pages.Count} page(s) · " +
-                $"{document.Timing.TotalMilliseconds:F0} ms";
+                $"{document.Ppi:F0} PPI · {document.Timing.TotalMilliseconds:F0} ms";
             _status.Text = summary;
             _status.ForeColor = Color.FromArgb(8, 127, 91);
             Text = $"Cetz.Renderer WinForms Sample — {summary} · Typst {document.TypstVersion}";
+            ScheduleAutomaticQualityRefresh();
         }
         catch (Exception exception)
         {
@@ -296,11 +334,25 @@ public sealed class MainForm : Form
         var displayPage = count == 0 ? 0 : _preview.CurrentPageIndex + 1;
         var facing = _preview.ViewMode is CetzPageViewMode.ContinuousFacing or CetzPageViewMode.FacingPages;
         var lastVisible = count == 0 ? 0 : Math.Min(count, displayPage + (facing ? 1 : 0));
+        _syncingPageInput = true;
+        try
+        {
+            _pageInput.Maximum = Math.Max(1, count);
+            _pageInput.Value = Math.Max(1, displayPage);
+            _pageInput.Enabled = count > 0;
+        }
+        finally { _syncingPageInput = false; }
         _pageIndicator.Text = facing && lastVisible > displayPage
-            ? $"{displayPage}–{lastVisible} / {count}"
-            : $"{displayPage} / {count}";
+            ? $"–{lastVisible} / {count}"
+            : $"/ {count}";
         _previousButton.Enabled = count > 0 && _preview.CurrentPageIndex > 0;
         _nextButton.Enabled = count > 0 && _preview.CurrentPageIndex + (facing ? 2 : 1) < count;
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        Size = LogicalToDeviceUnits(InitialLogicalWindowSize);
     }
 
     private void BeginPan(object? sender, MouseEventArgs args)
@@ -336,7 +388,20 @@ public sealed class MainForm : Form
         _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
         _zoom.Value = Math.Clamp((decimal)_preview.Zoom, _zoom.Minimum, _zoom.Maximum);
         BeginInvoke(() => ApplyScrollOffset(offset));
+        ScheduleAutomaticQualityRefresh();
         UpdateNavigation();
+    }
+
+    private CetzRasterQualityMode SelectedQualityMode =>
+        (_qualityPicker.SelectedItem as RasterQualityChoice)?.Mode ?? CetzRasterQualityMode.Automatic;
+
+    private void ScheduleAutomaticQualityRefresh()
+    {
+        if (!_opened || SelectedQualityMode != CetzRasterQualityMode.Automatic) return;
+        var ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _preview.Zoom);
+        if (_preview.Document is { } document && Math.Abs(document.Ppi - ppi) < 0.5f) return;
+        _qualityTimer.Stop();
+        _qualityTimer.Start();
     }
 
     private CetzViewportOffset CurrentScrollOffset()
@@ -352,6 +417,18 @@ public sealed class MainForm : Form
         DropDownStyle = ComboBoxStyle.DropDownList,
         Width = 132
     };
+
+    private static readonly RasterQualityChoice[] RasterQualityChoices =
+    [
+        new(CetzRasterQualityMode.Fixed, "픽셀 고정 · 144 PPI"),
+        new(CetzRasterQualityMode.HighResolution, "고해상도 · 288 PPI"),
+        new(CetzRasterQualityMode.Automatic, "자동 고해상도")
+    ];
+
+    private sealed record RasterQualityChoice(CetzRasterQualityMode Mode, string Label)
+    {
+        public override string ToString() => Label;
+    }
 
     private static string ResolveNativeLibrary()
     {

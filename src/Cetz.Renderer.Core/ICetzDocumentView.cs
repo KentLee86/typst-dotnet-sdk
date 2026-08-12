@@ -34,6 +34,7 @@ public interface ICetzDocumentView
     void SetViewport(double width, double height);
     void SetPageSpacing(double pageSpacing);
     void GoToPage(int pageIndex);
+    bool TrackCurrentPage(int pageIndex);
     bool MoveNext();
     bool MovePrevious();
     void ReleaseDocument();

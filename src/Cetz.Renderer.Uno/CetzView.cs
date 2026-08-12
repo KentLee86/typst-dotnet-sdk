@@ -45,7 +45,9 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         new PropertyMetadata(CetzDocumentViewController.DefaultPageSpacing, OnPageSpacingChanged));
 
     private readonly CetzDocumentViewController _controller = new();
-    private readonly List<PageResource> _pageResources = [];
+    private readonly Dictionary<int, PageResource> _pageResources = [];
+    private (double X, double Y, double Width, double Height)? _visibleRegion;
+    private int _overscanPages = 1;
     private bool _synchronizingProperties;
     private bool _disposed;
 
@@ -91,6 +93,8 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
     public int CurrentPageIndex => _controller.CurrentPageIndex;
     public int PageCount => _controller.PageCount;
     public CetzDocumentViewLayout Layout => _controller.Layout;
+    public int RealizedPageCount => _pageResources.Count;
+    public IReadOnlyCollection<int> RealizedPageIndices => _pageResources.Keys.Order().ToArray();
 
     public void SetDocument(CetzRenderedDocument document)
     {
@@ -136,6 +140,12 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         BringCurrentPageIntoView();
     }
 
+    public bool TrackCurrentPage(int pageIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _controller.TrackCurrentPage(pageIndex);
+    }
+
     public bool MoveNext()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -152,6 +162,15 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         if (moved)
             BringCurrentPageIntoView();
         return moved;
+    }
+
+    public void SetVisibleRegion(double x, double y, double width, double height, int overscanPages = 1)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(overscanPages);
+        _visibleRegion = (x, y, width, height);
+        _overscanPages = overscanPages;
+        RefreshPageResources();
     }
 
     public void ReleaseDocument()
@@ -182,9 +201,22 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         ReleasePageResources();
         if (_disposed || _controller.Document is null)
             return;
+        RefreshPageResources();
+    }
 
-        foreach (var page in _controller.Document.Pages)
+    private void RefreshPageResources()
+    {
+        if (_disposed || _controller.Document is null) return;
+        var desired = DesiredPageIndices().ToHashSet();
+        foreach (var pageIndex in _pageResources.Keys.Where(index => !desired.Contains(index)).ToArray())
         {
+            Children.Remove(_pageResources[pageIndex].Image);
+            _pageResources[pageIndex].Release();
+            _pageResources.Remove(pageIndex);
+        }
+        foreach (var pageIndex in desired.Where(index => !_pageResources.ContainsKey(index)))
+        {
+            var page = _controller.Document.Pages[pageIndex];
             var pixels = CetzUnoPixelConverter.ToBgra8Premultiplied(
                 page.Pixels.Span,
                 page.PixelWidth,
@@ -205,7 +237,7 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top
             };
-            _pageResources.Add(new PageResource(image, bitmap));
+            _pageResources.Add(pageIndex, new PageResource(image, bitmap));
             Children.Add(image);
         }
 
@@ -217,15 +249,15 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         Width = _controller.Layout.ExtentWidth;
         Height = _controller.Layout.ExtentHeight;
 
-        foreach (var resource in _pageResources)
+        foreach (var resource in _pageResources.Values)
             resource.Image.Visibility = Visibility.Collapsed;
 
         foreach (var pageLayout in _controller.Layout.Pages)
         {
-            if ((uint)pageLayout.PageIndex >= (uint)_pageResources.Count)
+            if (!_pageResources.TryGetValue(pageLayout.PageIndex, out var resource))
                 continue;
 
-            var image = _pageResources[pageLayout.PageIndex].Image;
+            var image = resource.Image;
             image.Visibility = Visibility.Visible;
             image.Width = pageLayout.Width;
             image.Height = pageLayout.Height;
@@ -252,14 +284,14 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
 
     private void BringCurrentPageIntoView()
     {
-        if ((uint)_controller.CurrentPageIndex < (uint)_pageResources.Count)
-            _pageResources[_controller.CurrentPageIndex].Image.StartBringIntoView();
+        if (_pageResources.TryGetValue(_controller.CurrentPageIndex, out var resource))
+            resource.Image.StartBringIntoView();
     }
 
     private void ReleasePageResources()
     {
         Children.Clear();
-        foreach (var resource in _pageResources)
+        foreach (var resource in _pageResources.Values)
             resource.Release();
         _pageResources.Clear();
     }
@@ -268,6 +300,7 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
     {
         SynchronizeDependencyProperties();
         ApplyLayout();
+        RefreshPageResources();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
@@ -317,6 +350,14 @@ public sealed class CetzView : Canvas, ICetzDocumentView, IDisposable
         var view = (CetzView)sender;
         if (!view._synchronizingProperties && !view._disposed)
             view._controller.SetPageSpacing((double)args.NewValue);
+    }
+
+    private IReadOnlyList<int> DesiredPageIndices()
+    {
+        if (_visibleRegion is not { } region)
+            return _controller.Layout.Pages.Select(page => page.PageIndex).ToArray();
+        return CetzVisiblePageSelector.Select(
+            _controller.Layout, region.X, region.Y, region.Width, region.Height, _overscanPages);
     }
 
     private sealed class PageResource(Image image, WriteableBitmap bitmap)

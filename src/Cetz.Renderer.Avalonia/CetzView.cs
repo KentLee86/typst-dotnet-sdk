@@ -28,8 +28,10 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     public static readonly StyledProperty<CetzPageViewMode> ViewModeProperty =
         AvaloniaProperty.Register<CetzView, CetzPageViewMode>(nameof(ViewMode));
 
-    private readonly List<Bitmap> _bitmaps = [];
+    private readonly Dictionary<int, Bitmap> _bitmaps = [];
     private readonly CetzDocumentViewController _controller = new();
+    private Rect? _visibleRegion;
+    private int _overscanPages = 1;
     private bool _disposed;
     private bool _synchronizingProperties;
 
@@ -72,6 +74,8 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     public int CurrentPageIndex => _controller.CurrentPageIndex;
     public int PageCount => _controller.PageCount;
     public CetzDocumentViewLayout Layout => _controller.Layout;
+    public int RealizedPageCount => _bitmaps.Count;
+    public IReadOnlyCollection<int> RealizedPageIndices => _bitmaps.Keys.Order().ToArray();
 
     public void SetDocument(CetzRenderedDocument document) => Document = document;
     public void SetZoom(double zoom) => Zoom = zoom;
@@ -86,9 +90,25 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     }
     public void SetPageSpacing(double pageSpacing) => PageSpacing = pageSpacing;
     public void GoToPage(int pageIndex) { _controller.GoToPage(pageIndex); NavigationChanged(); }
+    public bool TrackCurrentPage(int pageIndex) => _controller.TrackCurrentPage(pageIndex);
     public bool MoveNext() { var changed = _controller.MoveNext(); if (changed) NavigationChanged(); return changed; }
     public bool MovePrevious() { var changed = _controller.MovePrevious(); if (changed) NavigationChanged(); return changed; }
     public void ReleaseDocument() => Document = null;
+
+    public void SetVisibleRegion(Rect region, int overscanPages = 1)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(overscanPages);
+        _visibleRegion = region;
+        _overscanPages = overscanPages;
+        RefreshBitmaps();
+    }
+
+    public void ClearVisibleRegion()
+    {
+        if (_visibleRegion is null) return;
+        _visibleRegion = null;
+        RefreshBitmaps();
+    }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -127,14 +147,15 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     {
         base.Render(context);
         var document = Document;
-        if (document is null || _bitmaps.Count != document.Pages.Count)
+        if (document is null)
             return;
 
         foreach (var placement in Layout.Pages)
         {
+            if (!_bitmaps.TryGetValue(placement.PageIndex, out var bitmap)) continue;
             var page = document.Pages[placement.PageIndex];
             context.DrawImage(
-                _bitmaps[placement.PageIndex],
+                bitmap,
                 new Rect(0, 0, page.PixelWidth, page.PixelHeight),
                 new Rect(placement.X, placement.Y, placement.Width, placement.Height));
         }
@@ -144,7 +165,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     {
         base.OnAttachedToVisualTree(e);
         if (_bitmaps.Count == 0 && Document is not null)
-            RebuildBitmaps();
+            RefreshBitmaps();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -165,11 +186,26 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     private unsafe void RebuildBitmaps()
     {
         DisposeBitmaps();
+        RefreshBitmaps();
+    }
+
+    private unsafe void RefreshBitmaps()
+    {
         if (Document is null)
             return;
 
-        foreach (var page in Document.Pages)
+        var desired = DesiredPageIndices().ToHashSet();
+        var changed = false;
+        foreach (var pageIndex in _bitmaps.Keys.Where(index => !desired.Contains(index)).ToArray())
         {
+            _bitmaps[pageIndex].Dispose();
+            _bitmaps.Remove(pageIndex);
+            changed = true;
+        }
+
+        foreach (var pageIndex in desired.Where(index => !_bitmaps.ContainsKey(index)))
+        {
+            var page = Document.Pages[pageIndex];
             var bitmap = new WriteableBitmap(
                 new PixelSize(page.PixelWidth, page.PixelHeight),
                 new Vector(page.Ppi, page.Ppi),
@@ -187,18 +223,26 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
                         .CopyTo(destination.Slice(row * framebuffer.RowBytes, page.PixelWidth * 4));
                 }
             }
-            _bitmaps.Add(bitmap);
+            _bitmaps.Add(pageIndex, bitmap);
+            changed = true;
         }
 
-        InvalidateMeasure();
-        InvalidateVisual();
+        if (changed) InvalidateVisual();
     }
 
     private void DisposeBitmaps()
     {
-        foreach (var bitmap in _bitmaps)
+        foreach (var bitmap in _bitmaps.Values)
             bitmap.Dispose();
         _bitmaps.Clear();
+    }
+
+    private IReadOnlyList<int> DesiredPageIndices()
+    {
+        if (_visibleRegion is not { } region)
+            return Layout.Pages.Select(page => page.PageIndex).ToArray();
+        return CetzVisiblePageSelector.Select(
+            Layout, region.X, region.Y, region.Width, region.Height, _overscanPages);
     }
 
     private static double CoerceZoom(AvaloniaObject owner, double value)

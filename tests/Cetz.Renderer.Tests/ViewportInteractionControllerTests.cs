@@ -121,6 +121,7 @@ public sealed class ViewportInteractionControllerTests
         public void SetViewport(double width, double height) => _controller.SetViewport(width, height);
         public void SetPageSpacing(double pageSpacing) => _controller.SetPageSpacing(pageSpacing);
         public void GoToPage(int pageIndex) => _controller.GoToPage(pageIndex);
+        public bool TrackCurrentPage(int pageIndex) => _controller.TrackCurrentPage(pageIndex);
         public bool MoveNext() => _controller.MoveNext();
         public bool MovePrevious() => _controller.MovePrevious();
         public void ReleaseDocument() => _controller.ReleaseDocument();

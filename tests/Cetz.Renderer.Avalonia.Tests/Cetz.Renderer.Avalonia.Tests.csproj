@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\src\Cetz.Renderer.Avalonia\Cetz.Renderer.Avalonia.csproj" />
     <ProjectReference Include="..\..\src\Cetz.Renderer\Cetz.Renderer.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\samples\Cetz.Renderer.Avalonia.Sample\QuotationTemplate.cs"
+             Link="Sample\QuotationTemplate.cs" />
+  </ItemGroup>
 </Project>

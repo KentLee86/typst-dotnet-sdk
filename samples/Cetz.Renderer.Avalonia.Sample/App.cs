@@ -17,7 +17,7 @@ public sealed class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow();
+            desktop.MainWindow = new MainWindow(Program.InitialDemoId);
         base.OnFrameworkInitializationCompleted();
     }
 }

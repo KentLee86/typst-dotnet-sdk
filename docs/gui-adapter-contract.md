@@ -34,6 +34,20 @@ to `Custom` mode and preserves the document position beneath the pointer.
 Avalonia applications can use `CetzViewport`, which supplies the native scroll host,
 four-direction workspace, routed input interception, and layout-synchronized anchoring.
 
+`CetzRasterQualityPolicy` separates logical zoom from backing raster density. `Fixed`
+uses 144 PPI, `HighResolution` uses 288 PPI, and `Automatic` selects a bounded density
+step from 144 through 768 PPI. Hosts should debounce automatic rerenders and retain
+the current view zoom and pointer anchor when replacing the document.
+
+`CetzVisiblePageSelector` is the shared realization policy for continuous views.
+Avalonia, Uno, WinForms, WPF, and WinUI keep native bitmap resources only for pages
+intersecting the viewport plus one page of sequential overscan, and release resources
+as pages leave that window. The immutable Core document still owns every rendered RGBA
+page; reducing native render time and Core pixel memory requires a future page-lazy ABI.
+Continuous scroll hosts select the page with the largest visible area and call
+`TrackCurrentPage`; this updates navigation/status state without issuing a reciprocal
+scroll request. Button and direct page navigation continue to use `GoToPage`.
+
 ## Adapter acceptance checklist
 
 1. The control is assignable to `ICetzDocumentView`.
@@ -41,5 +55,6 @@ four-direction workspace, routed input interception, and layout-synchronized anc
 3. Painting uses `CetzDocumentViewController.Layout` page indices and bounds exactly.
 4. All four view modes, all three zoom modes, and both navigation step sizes are tested.
 5. Replacement, release, unload/reload, and disposal do not retain stale native images.
-6. The demo exposes demo selection, zoom mode, view mode, previous/next, and page status.
+6. The demo exposes demo selection, zoom mode, raster quality, view mode,
+   previous/next, editable current page, and scroll-synchronized page status.
 7. Build and tests run in the feature worktree after both Core commits are applied.

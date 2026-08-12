@@ -52,6 +52,7 @@ public sealed class WinUiViewTests
         Assert.True(first.Disposed);
         Assert.False(second.Disposed);
         Assert.Equal(1, resources.Count);
+        Assert.Equal([1], resources.PageIndices);
 
         resources.Clear();
         Assert.True(second.Disposed);

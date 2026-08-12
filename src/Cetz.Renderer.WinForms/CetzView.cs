@@ -13,7 +13,7 @@ namespace Cetz.Renderer.WinForms;
 /// </summary>
 public sealed class CetzView : ScrollableControl, ICetzDocumentView
 {
-    private readonly List<Bitmap> _bitmaps = [];
+    private readonly Dictionary<int, Bitmap> _bitmaps = [];
     private readonly CetzDocumentViewController _controller = new();
     private bool _disposed;
 
@@ -80,6 +80,10 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
     public new CetzDocumentViewLayout Layout => _controller.Layout;
 
     internal int BitmapCount => _bitmaps.Count;
+    public int RealizedPageCount => _bitmaps.Count;
+    public IReadOnlyCollection<int> RealizedPageIndices => _bitmaps.Keys.Order().ToArray();
+
+    public event EventHandler? CurrentPageChanged;
 
     public void SetDocument(CetzRenderedDocument document)
     {
@@ -87,13 +91,10 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
         ArgumentNullException.ThrowIfNull(document);
         if (ReferenceEquals(_controller.Document, document)) return;
 
-        // Convert first so a failed GDI allocation leaves the successful preview intact.
-        var replacements = CreateBitmaps(document);
-        var previous = _bitmaps.ToArray();
+        DisposeBitmaps(_bitmaps.Values);
         _bitmaps.Clear();
-        _bitmaps.AddRange(replacements);
         _controller.SetDocument(document);
-        DisposeBitmaps(previous);
+        RefreshBitmaps();
     }
 
     public void SetZoom(double zoom)
@@ -134,6 +135,12 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
         ScrollCurrentPageIntoView();
     }
 
+    public bool TrackCurrentPage(int pageIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _controller.TrackCurrentPage(pageIndex);
+    }
+
     public bool MoveNext()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -153,7 +160,7 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
     public void ReleaseDocument()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        DisposeBitmaps(_bitmaps);
+        DisposeBitmaps(_bitmaps.Values);
         _bitmaps.Clear();
         _controller.ReleaseDocument();
     }
@@ -162,12 +169,20 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
     {
         base.OnHandleCreated(e);
         UpdateControllerViewport();
+        RefreshBitmaps();
     }
 
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
         UpdateControllerViewport();
+    }
+
+    protected override void OnScroll(ScrollEventArgs se)
+    {
+        base.OnScroll(se);
+        RefreshBitmaps();
+        TrackCurrentPageFromViewport();
     }
 
     protected override void RescaleConstantsForDpi(int deviceDpiOld, int deviceDpiNew)
@@ -197,14 +212,14 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
         var scroll = AutoScrollPosition;
         foreach (var pageLayout in layout.Pages)
         {
-            if ((uint)pageLayout.PageIndex >= (uint)_bitmaps.Count) continue;
+            if (!_bitmaps.TryGetValue(pageLayout.PageIndex, out var bitmap)) continue;
             var destination = new RectangleF(
                 (float)(Padding.Left + scroll.X + pageLayout.X * scale),
                 (float)(Padding.Top + scroll.Y + pageLayout.Y * scale),
                 (float)(pageLayout.Width * scale),
                 (float)(pageLayout.Height * scale));
             if (destination.IntersectsWith(e.ClipRectangle))
-                e.Graphics.DrawImage(_bitmaps[pageLayout.PageIndex], destination);
+                e.Graphics.DrawImage(bitmap, destination);
         }
     }
 
@@ -213,7 +228,7 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
         if (disposing && !_disposed)
         {
             _controller.Changed -= Controller_Changed;
-            DisposeBitmaps(_bitmaps);
+            DisposeBitmaps(_bitmaps.Values);
             _bitmaps.Clear();
             _controller.ReleaseDocument();
             _disposed = true;
@@ -227,6 +242,7 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
         AutoScrollMinSize = new Size(
             ToScrollDimension(_controller.Layout.ExtentWidth * scale + Padding.Horizontal),
             ToScrollDimension(_controller.Layout.ExtentHeight * scale + Padding.Vertical));
+        RefreshBitmaps();
         Invalidate();
     }
 
@@ -249,20 +265,48 @@ public sealed class CetzView : ScrollableControl, ICetzDocumentView
             ToScrollDimension(current.Y * scale));
     }
 
-    private static List<Bitmap> CreateBitmaps(CetzRenderedDocument document)
+    private void TrackCurrentPageFromViewport()
     {
-        var bitmaps = new List<Bitmap>(document.Pages.Count);
-        try
+        if (_disposed || _controller.Document is null) return;
+        var scale = EffectiveDpi / 96d;
+        var regionX = (-AutoScrollPosition.X - Padding.Left) / scale;
+        var regionY = (-AutoScrollPosition.Y - Padding.Top) / scale;
+        var pageIndex = CetzVisiblePageSelector.SelectCurrentPage(
+            _controller.Layout,
+            regionX,
+            regionY,
+            ClientSize.Width / scale,
+            ClientSize.Height / scale);
+        if (pageIndex is { } selected && _controller.TrackCurrentPage(selected))
+            CurrentPageChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RefreshBitmaps()
+    {
+        var document = _controller.Document;
+        if (_disposed || document is null) return;
+        var desired = DesiredPageIndices().ToHashSet();
+        foreach (var pageIndex in _bitmaps.Keys.Where(index => !desired.Contains(index)).ToArray())
         {
-            foreach (var page in document.Pages)
-                bitmaps.Add(CetzBitmapConverter.CreateBitmap(page));
-            return bitmaps;
+            _bitmaps[pageIndex].Dispose();
+            _bitmaps.Remove(pageIndex);
         }
-        catch
-        {
-            DisposeBitmaps(bitmaps);
-            throw;
-        }
+        foreach (var pageIndex in desired.Where(index => !_bitmaps.ContainsKey(index)))
+            _bitmaps.Add(pageIndex, CetzBitmapConverter.CreateBitmap(document.Pages[pageIndex]));
+    }
+
+    private IReadOnlyList<int> DesiredPageIndices()
+    {
+        if (!IsHandleCreated)
+            return _controller.Layout.Pages.Select(page => page.PageIndex).ToArray();
+        var scale = EffectiveDpi / 96d;
+        return CetzVisiblePageSelector.Select(
+            _controller.Layout,
+            (-AutoScrollPosition.X - Padding.Left) / scale,
+            (-AutoScrollPosition.Y - Padding.Top) / scale,
+            ClientSize.Width / scale,
+            ClientSize.Height / scale,
+            overscanPages: 1);
     }
 
     private static void DisposeBitmaps(IEnumerable<Bitmap> bitmaps)

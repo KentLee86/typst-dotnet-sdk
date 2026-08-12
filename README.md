@@ -1,5 +1,7 @@
 # Cetz.Renderer
 
+[한국어](README.ko.md)
+
 Production-oriented .NET 8 SDK for rendering Typst 0.14.2 and CeTZ 0.5.2
 in-process. The package returns SVG, PNG, PDF, or premultiplied RGBA8 as managed
 memory. It never starts `typst.exe`, `cetz-render`, Node, or Sharp.
@@ -32,6 +34,36 @@ framework:
   [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
   navigation, lifecycle, and demo requirements.
 
+## GUI samples
+
+The primary desktop sample screenshots below use the same window size and render
+the same nine-page `Serial protocol` project from `Cetz.Renderer.Demo.Shared`.
+The second Avalonia screenshot shows its additional live quotation workflow.
+
+| [Avalonia](samples/Cetz.Renderer.Avalonia.Sample/) |
+| --- |
+| ![Avalonia sample rendering the Serial protocol demo](docs/assets/sample-avalonia.jpg) |
+
+| [Avalonia — Dynamic quotation](samples/Cetz.Renderer.Avalonia.Sample/) |
+| --- |
+| ![Avalonia sample rendering the live dynamic quotation](docs/assets/sample-avalonia-dynamic-quotation.jpg) |
+
+| [Uno Platform](samples/Cetz.Renderer.Uno.Sample/) |
+| --- |
+| ![Uno sample rendering the Serial protocol demo](docs/assets/sample-uno.jpg) |
+
+| [Windows Forms](samples/Cetz.Renderer.WinForms.Sample/) |
+| --- |
+| ![Windows Forms sample rendering the Serial protocol demo](docs/assets/sample-winforms.jpg) |
+
+| [WPF](samples/Cetz.Renderer.Wpf.Sample/) |
+| --- |
+| ![WPF sample rendering the Serial protocol demo](docs/assets/sample-wpf.jpg) |
+
+| [WinUI 3](samples/Cetz.Renderer.WinUI.Sample/) |
+| --- |
+| ![WinUI 3 sample rendering the Serial protocol demo](docs/assets/sample-winui3.jpg) |
+
 ## Avalonia
 
 Render through the common Core layer and assign the result to the Avalonia view:
@@ -54,11 +86,14 @@ Run the interactive editor and preview sample from the repository root:
 
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
+dotnet run --project samples/Cetz.Renderer.Avalonia.Sample -- --demo live-quotation
 ```
 
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
 embedded examples are UI-independent in-memory projects, so every GUI demo can
-reuse the same catalog without copying files again.
+reuse the same catalog without copying files again. The Avalonia-only
+`Dynamic quotation` example also exposes editable recipient fields and
+automatically refreshes both the Typst source and rendered preview.
 
 ## WPF
 
@@ -168,7 +203,7 @@ pages. Run the Windows Forms editor and multi-page preview from the repository r
 dotnet run --project samples/Cetz.Renderer.WinForms.Sample
 ```
 
-Both GUI samples reuse all nine projects in `Cetz.Renderer.Demo.Shared`, including
+All GUI samples reuse all nine projects in `Cetz.Renderer.Demo.Shared`, including
 multi-file imports, embedded SVG assets, and multi-page documents.
 
 ## WinUI 3

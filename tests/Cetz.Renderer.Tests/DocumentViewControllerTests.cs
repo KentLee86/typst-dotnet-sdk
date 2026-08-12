@@ -153,6 +153,23 @@ public sealed class DocumentViewControllerTests
         Assert.Equal([0, 1], controller.Layout.Pages.Select(page => page.PageIndex));
     }
 
+    [Fact]
+    public void TrackingAContinuousPageUpdatesStateWithoutChangingLayoutOrScrolling()
+    {
+        using var renderer = CreateRenderer();
+        var controller = new CetzDocumentViewController();
+        controller.SetDocument(RenderFourPages(renderer));
+        var layout = controller.Layout;
+
+        Assert.True(controller.TrackCurrentPage(2));
+
+        Assert.Equal(2, controller.CurrentPageIndex);
+        Assert.Same(layout, controller.Layout);
+        Assert.False(controller.TrackCurrentPage(2));
+        controller.SetViewMode(CetzPageViewMode.SinglePage);
+        Assert.False(controller.TrackCurrentPage(3));
+    }
+
     private static CetzDocumentRenderer CreateRenderer()
         => new(new CetzRendererOptions
         {

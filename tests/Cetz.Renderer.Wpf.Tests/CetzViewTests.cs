@@ -129,7 +129,9 @@ public sealed class CetzViewTests(CetzRendererFixture fixture) : IClassFixture<C
     {
         RunSta(() =>
         {
-            var document = fixture.Renderer.RenderSource("Hello");
+            var document = fixture.Renderer.RenderProject(
+                CetzDemoCatalog.Get("serial-protocol").CreateProject(),
+                new CetzDocumentRenderOptions { Ppi = 48 });
             using var view = new CetzView();
             var window = new Window
             {
@@ -148,10 +150,17 @@ public sealed class CetzViewTests(CetzRendererFixture fixture) : IClassFixture<C
                 view.SetDocument(document);
                 Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
 
+                view.SetVisibleRegion(new Rect(0, 0, 300, 180));
+
                 var bitmaps = Assert.IsAssignableFrom<ICollection>(typeof(CetzView)
                     .GetField("_bitmaps", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .GetValue(view));
-                Assert.Equal(document.Pages.Count, bitmaps.Count);
+                Assert.InRange(bitmaps.Count, 1, document.Pages.Count - 1);
+                Assert.Equal(bitmaps.Count, view.RealizedPageCount);
+
+                var target = view.Layout.Pages[5];
+                view.SetVisibleRegion(new Rect(target.X, target.Y, target.Width, target.Height));
+                Assert.Contains(target.PageIndex, view.RealizedPageIndices);
 
                 view.ReleaseDocument();
                 Assert.Empty(bitmaps);

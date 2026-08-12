@@ -55,6 +55,7 @@ public sealed class CetzViewTests
         using var view = new CetzView { ClientSize = new Size(600, 400), Padding = Padding.Empty };
         view.SetViewport(600, 400);
         view.SetDocument(FourPageDocument.Value);
+
         view.SetViewMode(CetzPageViewMode.SinglePage);
 
         Assert.True(view.MoveNext());
@@ -62,6 +63,7 @@ public sealed class CetzViewTests
         Assert.Single(view.Layout.Pages);
         view.GoToPage(3);
         Assert.Equal(3, view.CurrentPageIndex);
+        Assert.Contains(3, view.RealizedPageIndices);
         Assert.False(view.MoveNext());
         Assert.True(view.MovePrevious());
 
@@ -93,6 +95,8 @@ public sealed class CetzViewTests
         view.CreateControl();
         view.SetViewport(100, 40);
         view.SetDocument(FourPageDocument.Value);
+
+        Assert.InRange(view.RealizedPageCount, 1, 3);
 
         view.GoToPage(3);
 

@@ -102,6 +102,114 @@ public sealed class CetzViewportTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public async Task AutomaticQualityRerenderIncreasesBackingPixelsWithoutChangingZoom()
+    {
+        using var renderer = new CetzDocumentRenderer(RendererOptions());
+        using var viewport = new CetzViewport();
+        var window = Show(viewport);
+        try
+        {
+            viewport.View.SetDocument(await RenderDocument(renderer, 144));
+            Flush();
+            var originalPixels = viewport.View.Document!.Pages[0].PixelWidth;
+            var page = viewport.View.Layout.Pages[0];
+            const double relativeX = 0.4;
+            const double relativeY = 0.45;
+            var pointer = viewport.View.TranslatePoint(
+                new Point(page.X + page.Width * relativeX, page.Y + page.Height * relativeY), window)!.Value;
+
+            for (var index = 0; index < 4; index++)
+                window.MouseWheel(pointer, new Vector(0, 1), RawInputModifiers.Control);
+            Flush();
+            var zoom = viewport.View.Zoom;
+            var targetPpi = CetzRasterQualityPolicy.ResolvePpi(CetzRasterQualityMode.Automatic, zoom);
+
+            viewport.View.SetDocument(await RenderDocument(renderer, targetPpi));
+            Flush();
+            page = viewport.View.Layout.Pages[0];
+            var anchored = viewport.View.TranslatePoint(
+                new Point(page.X + page.Width * relativeX, page.Y + page.Height * relativeY), window)!.Value;
+
+            Assert.Equal(192, targetPpi);
+            Assert.True(viewport.View.Document!.Pages[0].PixelWidth > originalPixels);
+            Assert.Equal(zoom, viewport.View.Zoom);
+            Assert.InRange(Math.Abs(anchored.X - pointer.X), 0, 1);
+            Assert.InRange(Math.Abs(anchored.Y - pointer.Y), 0, 1);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task ContinuousDocumentRealizesOnlyVisiblePagesWithOverscan()
+    {
+        using var renderer = new CetzDocumentRenderer(RendererOptions());
+        using var viewport = new CetzViewport();
+        var window = Show(viewport);
+        try
+        {
+            viewport.View.SetDocument(await RenderLongDocument(renderer));
+            Flush();
+
+            Assert.InRange(viewport.View.RealizedPageCount, 1, 4);
+            Assert.Contains(0, viewport.View.RealizedPageIndices);
+            Assert.True(viewport.View.RealizedPageCount < viewport.View.PageCount);
+
+            var pageChanged = 0;
+            viewport.CurrentPageChanged += (_, _) => pageChanged++;
+            var first = viewport.View.Layout.Pages[0];
+            var seventh = viewport.View.Layout.Pages[6];
+            viewport.Offset = new Vector(
+                viewport.Offset.X + seventh.X - first.X,
+                viewport.Offset.Y + seventh.Y - first.Y);
+            Flush();
+
+            Assert.InRange(viewport.View.RealizedPageCount, 1, 4);
+            Assert.Contains(6, viewport.View.RealizedPageIndices);
+            Assert.DoesNotContain(0, viewport.View.RealizedPageIndices);
+            Assert.Equal(6, viewport.View.CurrentPageIndex);
+            Assert.True(pageChanged > 0);
+            using var frame = window.CaptureRenderedFrame();
+            Assert.NotNull(frame);
+            Assert.True(ContainsDifferentPixels(frame));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task ButtonAndNumericNavigationCanRepeatedlyMoveBetweenPages()
+    {
+        using var renderer = new CetzDocumentRenderer(RendererOptions());
+        using var viewport = new CetzViewport();
+        var window = Show(viewport);
+        try
+        {
+            viewport.View.SetDocument(await RenderLongDocument(renderer));
+            Flush();
+
+            for (var index = 0; index < 8; index++)
+            {
+                Assert.True(viewport.View.MoveNext());
+                Flush();
+                Assert.Equal(index + 1, viewport.View.CurrentPageIndex);
+                Assert.Contains(index + 1, viewport.View.RealizedPageIndices);
+            }
+
+            viewport.View.GoToPage(10);
+            Flush();
+            Assert.Equal(10, viewport.View.CurrentPageIndex);
+            Assert.Contains(10, viewport.View.RealizedPageIndices);
+
+            for (var index = 0; index < 5; index++)
+            {
+                Assert.True(viewport.View.MovePrevious());
+                Flush();
+            }
+            Assert.Equal(5, viewport.View.CurrentPageIndex);
+        }
+        finally { window.Close(); }
+    }
+
     private static Window Show(CetzViewport viewport)
     {
         var window = new Window { Width = 800, Height = 600, Content = viewport };
@@ -127,9 +235,15 @@ public sealed class CetzViewportTests
         return pixels[1..].ContainsAnyExcept(first);
     }
 
-    private static Task<CetzRenderedDocument> RenderDocument(CetzDocumentRenderer renderer) =>
+    private static Task<CetzRenderedDocument> RenderDocument(CetzDocumentRenderer renderer, float ppi = 96) =>
         renderer.RenderSourceAsync(
             "#set page(width: 400pt, height: 500pt, margin: 20pt)\n#set text(size: 36pt)\nCeTZ headless zoom test",
+            options: new CetzDocumentRenderOptions { Ppi = ppi });
+
+    private static Task<CetzRenderedDocument> RenderLongDocument(CetzDocumentRenderer renderer) =>
+        renderer.RenderSourceAsync(
+            "#set page(width: 400pt, height: 500pt, margin: 20pt)\n#set text(size: 36pt)\n" +
+            string.Join("\n#pagebreak()\n", Enumerable.Range(1, 12).Select(index => $"Page {index}")),
             options: new CetzDocumentRenderOptions { Ppi = 96 });
 
     private static CetzRendererOptions RendererOptions() => new()

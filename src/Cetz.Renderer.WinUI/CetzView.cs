@@ -42,8 +42,10 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
     private readonly ScrollViewer _scrollViewer;
     private readonly Canvas _pageCanvas;
     private readonly WinUiPageResourceSet<WinUiPageResource> _pageResources = new();
+    private CetzRenderedDocument? _resourceDocument;
     private bool _syncingProperties;
     private bool _disposed;
+    private double _reportedZoom = CetzDocumentViewController.DefaultZoom;
 
     public CetzView()
     {
@@ -62,6 +64,7 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
             VerticalContentAlignment = VerticalAlignment.Top
         };
         _scrollViewer.SizeChanged += ScrollViewerOnSizeChanged;
+        _scrollViewer.ViewChanged += ScrollViewerOnViewChanged;
         _pageCanvas.AddHandler(PointerPressedEvent, new PointerEventHandler(BeginPan), true);
         _pageCanvas.AddHandler(PointerMovedEvent, new PointerEventHandler(ContinuePan), true);
         _pageCanvas.AddHandler(PointerReleasedEvent, new PointerEventHandler(EndPan), true);
@@ -109,6 +112,11 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
     public int CurrentPageIndex => _controller.CurrentPageIndex;
     public int PageCount => _controller.PageCount;
     public CetzDocumentViewLayout Layout => _controller.Layout;
+    public int RealizedPageCount => _pageResources.Count;
+    public IReadOnlyCollection<int> RealizedPageIndices => _pageResources.PageIndices;
+
+    public event EventHandler? CurrentPageChanged;
+    public event EventHandler? ZoomChanged;
 
     public void SetDocument(CetzRenderedDocument document)
     {
@@ -152,6 +160,12 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         VerifyAccess();
         _controller.GoToPage(pageIndex);
         ScrollCurrentPageIntoView();
+    }
+
+    public bool TrackCurrentPage(int pageIndex)
+    {
+        VerifyAccess();
+        return _controller.TrackCurrentPage(pageIndex);
     }
 
     public bool MoveNext()
@@ -208,6 +222,7 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         _disposed = true;
         _controller.Changed -= ControllerOnChanged;
         _scrollViewer.SizeChanged -= ScrollViewerOnSizeChanged;
+        _scrollViewer.ViewChanged -= ScrollViewerOnViewChanged;
         _pageCanvas.RemoveHandler(PointerPressedEvent, new PointerEventHandler(BeginPan));
         _pageCanvas.RemoveHandler(PointerMovedEvent, new PointerEventHandler(ContinuePan));
         _pageCanvas.RemoveHandler(PointerReleasedEvent, new PointerEventHandler(EndPan));
@@ -257,6 +272,11 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
     {
         SyncDependencyProperties();
         ApplyLayout();
+        if (Math.Abs(_reportedZoom - _controller.Zoom) > double.Epsilon)
+        {
+            _reportedZoom = _controller.Zoom;
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void SyncDependencyProperties()
@@ -280,18 +300,27 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         if (document is null)
         {
             ClearPageResources();
+            _resourceDocument = null;
             _pageCanvas.Width = 0;
             _pageCanvas.Height = 0;
             return;
         }
 
-        _pageResources.RetainOnly(layout.Pages.Select(page => page.PageIndex));
+        if (!ReferenceEquals(_resourceDocument, document))
+        {
+            ClearPageResources();
+            _resourceDocument = document;
+        }
+
+        var desired = VisiblePageIndices(layout);
+        _pageResources.RetainOnly(desired);
 
         _pageCanvas.Children.Clear();
         _pageCanvas.Width = layout.ExtentWidth;
         _pageCanvas.Height = layout.ExtentHeight;
         foreach (var placement in layout.Pages)
         {
+            if (!desired.Contains(placement.PageIndex)) continue;
             var resource = _pageResources.GetOrAdd(placement.PageIndex,
                 pageIndex => WinUiPageResource.Create(document.Pages[pageIndex]));
             resource.Image.Width = placement.Width;
@@ -307,6 +336,37 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         var width = _scrollViewer.ViewportWidth;
         var height = _scrollViewer.ViewportHeight;
         _controller.SetViewport(width, height);
+        UpdateViewportState();
+    }
+
+    private void ScrollViewerOnViewChanged(object? sender, ScrollViewerViewChangedEventArgs args) =>
+        UpdateViewportState();
+
+    private void UpdateViewportState()
+    {
+        if (_disposed || _controller.Document is null) return;
+        var pageIndex = CetzVisiblePageSelector.SelectCurrentPage(
+            _controller.Layout,
+            _scrollViewer.HorizontalOffset,
+            _scrollViewer.VerticalOffset,
+            _scrollViewer.ViewportWidth,
+            _scrollViewer.ViewportHeight);
+        if (pageIndex is { } selected && _controller.TrackCurrentPage(selected))
+            CurrentPageChanged?.Invoke(this, EventArgs.Empty);
+        ApplyLayout();
+    }
+
+    private HashSet<int> VisiblePageIndices(CetzDocumentViewLayout layout)
+    {
+        if (_scrollViewer.ViewportWidth <= 0 || _scrollViewer.ViewportHeight <= 0)
+            return layout.Pages.Select(page => page.PageIndex).ToHashSet();
+        return CetzVisiblePageSelector.Select(
+            layout,
+            _scrollViewer.HorizontalOffset,
+            _scrollViewer.VerticalOffset,
+            _scrollViewer.ViewportWidth,
+            _scrollViewer.ViewportHeight,
+            overscanPages: 1).ToHashSet();
     }
 
     private void BeginPan(object sender, PointerRoutedEventArgs args)

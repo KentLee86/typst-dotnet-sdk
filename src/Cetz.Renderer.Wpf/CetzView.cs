@@ -32,8 +32,10 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         new FrameworkPropertyMetadata(CetzPageViewMode.ContinuousSingle, OnViewModeChanged));
 
     private readonly CetzDocumentViewController _controller = new();
-    private readonly List<BitmapSource> _bitmaps = [];
+    private readonly Dictionary<int, BitmapSource> _bitmaps = [];
     private CetzRenderedDocument? _bitmapDocument;
+    private Rect? _visibleRegion;
+    private int _overscanPages = 1;
     private bool _synchronizing;
     private bool _disposed;
 
@@ -80,6 +82,8 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
     public int CurrentPageIndex => _controller.CurrentPageIndex;
     public int PageCount => _controller.PageCount;
     public CetzDocumentViewLayout Layout => _controller.Layout;
+    public int RealizedPageCount => _bitmaps.Count;
+    public IReadOnlyCollection<int> RealizedPageIndices => _bitmaps.Keys.Order().ToArray();
 
     public void SetDocument(CetzRenderedDocument document)
     {
@@ -125,6 +129,12 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         BringCurrentPageIntoView();
     }
 
+    public bool TrackCurrentPage(int pageIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _controller.TrackCurrentPage(pageIndex);
+    }
+
     public bool MoveNext()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -141,6 +151,21 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         return moved;
     }
 
+    public void SetVisibleRegion(Rect region, int overscanPages = 1)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(overscanPages);
+        _visibleRegion = region;
+        _overscanPages = overscanPages;
+        RefreshBitmaps();
+    }
+
+    public void ClearVisibleRegion()
+    {
+        _visibleRegion = null;
+        RefreshBitmaps();
+    }
+
     public void ReleaseDocument()
     {
         if (_disposed) return;
@@ -154,12 +179,11 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
-        if (_bitmaps.Count != PageCount) return;
+        if (Document is null) return;
 
         foreach (var page in Layout.Pages)
-            drawingContext.DrawImage(
-                _bitmaps[page.PageIndex],
-                new Rect(page.X, page.Y, page.Width, page.Height));
+            if (_bitmaps.TryGetValue(page.PageIndex, out var bitmap))
+                drawingContext.DrawImage(bitmap, new Rect(page.X, page.Y, page.Width, page.Height));
     }
 
     public void Dispose()
@@ -225,6 +249,8 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
 
         if (!ReferenceEquals(_bitmapDocument, _controller.Document))
             RebuildBitmaps();
+        else
+            RefreshBitmaps();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -267,8 +293,26 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         ClearBitmaps();
         _bitmapDocument = Document;
         if (_disposed || !IsLoaded || Document is null) return;
-        foreach (var page in Document.Pages)
-            _bitmaps.Add(CetzBitmapSource.Create(page));
+        RefreshBitmaps();
+    }
+
+    private void RefreshBitmaps()
+    {
+        if (_disposed || !IsLoaded || Document is null) return;
+        var desired = DesiredPageIndices().ToHashSet();
+        foreach (var pageIndex in _bitmaps.Keys.Where(index => !desired.Contains(index)).ToArray())
+            _bitmaps.Remove(pageIndex);
+        foreach (var pageIndex in desired.Where(index => !_bitmaps.ContainsKey(index)))
+            _bitmaps.Add(pageIndex, CetzBitmapSource.Create(Document.Pages[pageIndex]));
+        InvalidateVisual();
+    }
+
+    private IReadOnlyList<int> DesiredPageIndices()
+    {
+        if (_visibleRegion is not { } region)
+            return Layout.Pages.Select(page => page.PageIndex).ToArray();
+        return CetzVisiblePageSelector.Select(
+            Layout, region.X, region.Y, region.Width, region.Height, _overscanPages);
     }
 
     private void ClearBitmaps()

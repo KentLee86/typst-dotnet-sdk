@@ -1,96 +1,311 @@
 # Cetz.Renderer
 
-네이티브 SDK 위의 GUI 통합은 플랫폼별 의존성이 섞이지 않도록 계층을
-분리합니다.
+[English](README.md)
 
-- `Cetz.Renderer.Core`: 렌더 결과를 GUI 공통 RGBA 문서/페이지로 변환합니다.
-- `Cetz.Renderer.Avalonia`: 공통 문서를 표시하는 재사용 가능한 `CetzView`를 제공합니다.
-- `Cetz.Renderer.Uno`: 공통 문서를 표시하는 Uno Platform용 `CetzView`를 제공합니다.
-- `Cetz.Renderer.WinForms`: DPI, 확대/축소, 다중 페이지 스크롤을 지원하는 Windows Forms용 `CetzView`를 제공합니다.
-- `Cetz.Renderer.Wpf`: 같은 문서를 DPI와 다중 페이지를 보존해 표시하는 WPF `CetzView`를 제공합니다.
-- `Cetz.Renderer.WinUI`: Windows App SDK 기반 WinUI 3용 스크롤 가능한 다중 페이지 `CetzView`를 제공합니다.
-- `samples/Cetz.Renderer.Avalonia.Sample`: 소스를 편집하고 즉시 실제 화면을 확인하는 예제입니다.
-- `samples/Cetz.Renderer.Uno.Sample`: 같은 9개 예제를 사용하는 Uno 편집기/다중 페이지 미리보기입니다.
-- `samples/Cetz.Renderer.WinForms.Sample`: 같은 9개 예제를 사용하는 Windows Forms 편집/미리보기 예제입니다.
-- `samples/Cetz.Renderer.Wpf.Sample`: 9개 공용 데모를 편집하고 스크롤 미리보기로 확인하는 WPF 예제입니다.
-- `samples/Cetz.Renderer.WinUI.Sample`: 같은 9개 데모를 사용하는 unpackaged x64 WinUI 3 예제입니다.
-- `samples/Cetz.Renderer.Demo.Shared`: 모든 GUI 데모가 함께 사용하는 9개 내장 예제 카탈로그입니다.
+Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 운영 환경 지향
+.NET 8 SDK입니다. 패키지는 SVG, PNG, PDF 또는 premultiplied RGBA8 결과를
+관리 메모리로 반환합니다. `typst.exe`, `cetz-render`, Node 또는 Sharp를 실행하지
+않습니다.
+
+## 패키지
+
+런타임 패키지 하나를 참조하면 정확히 일치하는 관리 패키지가 함께 설치됩니다.
+
+```xml
+<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+```
+
+Linux x64에서는 `Cetz.Renderer.Native.linux-x64`를 사용합니다. 네이티브 자산은
+NuGet의 `runtimes/{rid}/native/` 규칙을 따릅니다.
+
+네이티브 SDK가 모든 UI 프레임워크로부터 독립성을 유지하도록 GUI 통합 계층을
+분리했습니다.
+
+- `Cetz.Renderer.Core`는 렌더러 결과를 화면 표시용 RGBA 문서로 변환하며 공통
+  렌더링, 확대/축소, 레이아웃, 보기 모드 및 탐색 동작을 담당합니다.
+- `Cetz.Renderer.Avalonia`는 재사용 가능한 `CetzView`로 문서를 표시합니다.
+- `Cetz.Renderer.Uno`는 재사용 가능한 WinUI/Uno `CetzView`로 문서를 표시합니다.
+- `Cetz.Renderer.WinForms`는 DPI 인식 확대/축소와 다중 페이지 스크롤을 지원하는
+  Windows Forms 네이티브 `CetzView`를 제공합니다.
+- `Cetz.Renderer.Wpf`는 같은 문서를 재사용 가능한 WPF `CetzView`로 표시합니다.
+- `Cetz.Renderer.WinUI`는 현재 안정 버전 Windows App SDK 기반의 재사용 가능한
+  WinUI 3 `CetzView`를 제공합니다. 대상 프레임워크는
+  `net8.0-windows10.0.19041.0`입니다.
+- 모든 GUI 어댑터는 하나의 보기/렌더링 계약을 공유합니다. 맞춤, 페이지 모드,
+  탐색, 수명 주기 및 데모 요구사항은
+  [GUI 어댑터 계약](docs/gui-adapter-contract.md)을 참고하세요.
+
+## GUI 샘플
+
+아래 데스크톱 샘플의 기본 화면은 모두 같은 창 크기를 사용하며
+`Cetz.Renderer.Demo.Shared`의 동일한 9페이지 `Serial protocol` 프로젝트를
+렌더링합니다. 두 번째 Avalonia 화면은 추가된 실시간 견적서 작업 흐름입니다.
+
+| [Avalonia](samples/Cetz.Renderer.Avalonia.Sample/) |
+| --- |
+| ![Serial protocol 데모를 렌더링한 Avalonia 샘플](docs/assets/sample-avalonia.jpg) |
+
+| [Avalonia — 동적 견적서](samples/Cetz.Renderer.Avalonia.Sample/) |
+| --- |
+| ![실시간 동적 견적서를 렌더링한 Avalonia 샘플](docs/assets/sample-avalonia-dynamic-quotation.jpg) |
+
+| [Uno Platform](samples/Cetz.Renderer.Uno.Sample/) |
+| --- |
+| ![Serial protocol 데모를 렌더링한 Uno 샘플](docs/assets/sample-uno.jpg) |
+
+| [Windows Forms](samples/Cetz.Renderer.WinForms.Sample/) |
+| --- |
+| ![Serial protocol 데모를 렌더링한 Windows Forms 샘플](docs/assets/sample-winforms.jpg) |
+
+| [WPF](samples/Cetz.Renderer.Wpf.Sample/) |
+| --- |
+| ![Serial protocol 데모를 렌더링한 WPF 샘플](docs/assets/sample-wpf.jpg) |
+
+| [WinUI 3](samples/Cetz.Renderer.WinUI.Sample/) |
+| --- |
+| ![Serial protocol 데모를 렌더링한 WinUI 3 샘플](docs/assets/sample-winui3.jpg) |
+
+## Avalonia
+
+공통 Core 계층으로 렌더링한 결과를 Avalonia 뷰에 할당합니다.
+
+```csharp
+using Cetz.Renderer.Avalonia;
+using Cetz.Renderer.Core;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Document = document,
+    Zoom = 1.0
+};
+```
+
+저장소 루트에서 편집기와 미리보기 대화형 샘플을 실행합니다.
 
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
-dotnet run --project samples/Cetz.Renderer.WinForms.Sample
+dotnet run --project samples/Cetz.Renderer.Avalonia.Sample -- --demo live-quotation
 ```
 
-Uno Desktop 데모는 다음과 같이 실행합니다. `Cetz.Renderer.Uno`는 Core의
-premultiplied RGBA 페이지를 Uno/WinUI의 premultiplied BGRA 순서로 변환하고,
-DPI 기반 크기와 zoom 및 페이지 간격을 적용합니다.
+샘플의 데모 선택기는 `Cetz.Renderer.Demo.Shared`를 사용합니다. 내장된 9개 예제는
+UI와 독립적인 인메모리 프로젝트이므로 모든 GUI 데모가 파일을 복사하지 않고
+동일한 카탈로그를 재사용합니다. Avalonia 전용 `동적 견적서` 예제는 편집 가능한
+공급받는자 필드를 제공하며 Typst 원본과 렌더링 미리보기를 자동으로 갱신합니다.
+
+## WPF
+
+`Cetz.Renderer.Wpf`는 `net8.0-windows`를 대상으로 하며 별도 서드파티 런타임
+의존성이 없습니다. 다중 페이지 스크롤을 사용하려면 WPF `ScrollViewer` 안에
+뷰를 배치합니다.
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.Wpf;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Document = document,
+    Zoom = 1.0,
+    PageSpacing = 24
+};
+var preview = new System.Windows.Controls.ScrollViewer { Content = view };
+```
+
+어댑터는 premultiplied RGBA 페이지를 WPF의 premultiplied BGRA 형식으로
+변환하고 각 페이지의 PPI를 보존하며 장치 독립 픽셀로 페이지 크기를 계산합니다.
+캐시된 이미지와 문서 참조를 결정적으로 해제하려면 뷰를 Dispose합니다.
+
+저장소 루트에서 편집 가능한 9개 데모 WPF 샘플을 실행합니다.
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Wpf.Sample
+```
+
+원격 데스크톱 또는 캡처 환경에서 WPF 하드웨어 합성 클라이언트 영역을 기록할 수
+없다면 `-- --software-rendering`을 전달합니다.
+
+## Uno Platform
+
+네이티브 RID 패키지와 함께 UI 어댑터를 참조합니다.
 
 ```xml
 <PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
 <PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
+Uno 어댑터는 공통 `ICetzDocumentView` 계약을 구현하고 확대/축소 맞춤, 페이지
+모드, 탐색 및 정확한 배치를 `CetzDocumentViewController`에 위임합니다.
+premultiplied RGBA 페이지를 WinUI의 premultiplied BGRA 배열로 변환하며,
+어댑터는 Uno 비트맵과 시각적 리소스만 소유합니다.
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.Uno;
+
+var view = new CetzView();
+view.SetViewport(1200, 800);
+using var renderController = new CetzRenderController(view);
+await renderController.RenderSourceAsync(typstSource);
+view.SetZoomMode(CetzZoomMode.FitWidth);
+view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+view.MoveNext();
+```
+
+저장소 루트에서 데스크톱 Uno 편집기와 다중 페이지 스크롤 미리보기를 실행합니다.
+Avalonia 샘플과 동일한 9개 `Cetz.Renderer.Demo.Shared` 예제를 사용하며 사용자 지정,
+폭 맞춤, 쪽 맞춤 확대/축소와 연속, 한 페이지, 두 페이지 보기 모드 및 이전/다음
+탐색을 제공합니다.
+
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
 ```
 
-저장소의 네이티브 산출물이 없으면 실행 전에 `CETZ_NATIVE_LIBRARY`를 빌드된
-`cetz_dotnet_native.dll`의 절대 경로로 설정합니다. Windows App SDK 타깃은
-`net8.0-windows10.0.26100`, Skia Desktop 타깃은 `net8.0-desktop`입니다.
+샘플 빌드 전에 `artifacts/native/win-x64/`에 네이티브 라이브러리가 없다면
+`CETZ_NATIVE_LIBRARY`를 빌드된 `cetz_dotnet_native.dll`로 설정합니다. 검증된
+대상은 `net8.0-desktop`(Skia Desktop)과
+`net8.0-windows10.0.26100`(Windows App SDK)입니다. 어댑터 패키지에는 다른 Uno
+헤드를 위한 프레임워크 중립 `net8.0` 자산도 포함됩니다.
 
-Avalonia 데모 상단 드롭다운에서 예제를 선택하면 공용 인메모리 프로젝트가
-소스 편집기와 미리보기에 즉시 로드됩니다. 로컬 import와 SVG 자산이 필요한
-예제도 동일한 카탈로그를 통해 제공됩니다.
+## Windows Forms
 
-WinForms 컨트롤은 Core의 premultiplied RGBA 페이지를 GDI+용 premultiplied
-BGRA 비트맵으로 안전하게 복사해 채널 순서와 알파를 보존합니다. 렌더 PPI,
-현재 모니터 DPI, `Zoom`을 함께 적용하고, 컨트롤 내부 스크롤 영역에서 보이는
-페이지만 그립니다. 문서 교체와 컨트롤 해제 시 소유 비트맵도 함께 해제됩니다.
+Windows Forms 어댑터는 `net8.0-windows`를 대상으로 하며 별도 서드파티 런타임
+의존성이 없습니다. Core의 premultiplied RGBA 페이지를 컨트롤 소유 GDI+
+premultiplied BGRA 비트맵으로 복사하고 알파를 보존하며, 페이지 배치 시 렌더 PPI,
+모니터 DPI 및 `Zoom`을 결합합니다.
 
-WPF 어댑터는 `net8.0-windows`를 대상으로 하며 별도 런타임 패키지 의존성이
-없습니다. Core의 premultiplied RGBA를 WPF의 Pbgra32로 변환하고, 원본 PPI를
-유지해 DIP 크기를 계산합니다. `CetzView`를 `ScrollViewer` 안에 배치하면 줌,
-페이지 간격, 가로/세로 다중 페이지 스크롤을 사용할 수 있습니다.
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.WinForms;
 
-```powershell
-dotnet run --project samples/Cetz.Renderer.Wpf.Sample
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Dock = DockStyle.Fill,
+    Document = document,
+    Zoom = 1.0,
+    PageSpacing = 24
+};
 ```
 
-원격 데스크톱이나 캡처 환경에서 WPF 하드웨어 합성 화면을 기록할 수 없다면
-`-- --software-rendering` 옵션을 추가할 수 있습니다.
+`CetzView`는 변환한 비트맵을 소유하고 문서가 바뀌거나 컨트롤이 Dispose될 때
+해제합니다. 내장 스크롤 표면은 보이는 페이지만 그립니다. 저장소 루트에서
+Windows Forms 편집기와 다중 페이지 미리보기를 실행합니다.
 
-WinUI 3 뷰는 Core의 premultiplied RGBA를 WinUI용 premultiplied BGRA로 변환하고,
-페이지 PPI를 96-DIP 좌표로 환산해 시스템 DPI와 무관하게 올바른 물리 크기를
-유지합니다. `Zoom`, `PageSpacing`을 설정할 수 있으며, 백그라운드 렌더 결과는
-`SetDocumentAsync`로 UI 스레드에 안전하게 전달할 수 있습니다.
+```powershell
+dotnet run --project samples/Cetz.Renderer.WinForms.Sample
+```
+
+모든 GUI 샘플은 다중 파일 import, 내장 SVG 자산 및 다중 페이지 문서를 포함하는
+`Cetz.Renderer.Demo.Shared`의 9개 프로젝트를 모두 재사용합니다.
+
+## WinUI 3
+
+`CetzView`는 `ICetzDocumentView`를 구현하고 맞춤, 페이지 모드, 탐색 및 정확한
+페이지 경계를 `CetzDocumentViewController`에 위임합니다. WinUI 어댑터는
+네이티브 이미지 리소스, UI 디스패치 및 스크롤만 담당합니다.
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.WinUI;
+
+var view = new CetzView
+{
+    ZoomMode = CetzZoomMode.FitWidth,
+    ViewMode = CetzPageViewMode.ContinuousFacing,
+    PageSpacing = 24
+};
+await view.SetDocumentAsync(document);
+view.MoveNext();
+```
+
+unpackaged x64 샘플은 `CetzRenderController`, 공통 9개 데모 카탈로그, 모든 맞춤
+및 페이지 모드, 탐색과 페이지 상태를 사용합니다.
 
 ```powershell
 $env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
 dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
 ```
 
-Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 프로덕션 지향 .NET 8
-SDK입니다. SVG, PNG, PDF, premultiplied RGBA8 결과를 관리 메모리로 반환하며
-`typst.exe`, `cetz-render`, Node, Sharp 프로세스를 실행하지 않습니다.
+## 메모리 렌더링
 
-Windows x64에서는 `Cetz.Renderer.Native.win-x64`, Linux x64에서는
-`Cetz.Renderer.Native.linux-x64` 패키지 하나만 참조합니다. RID 패키지가 같은
-버전의 `Cetz.Renderer`를 자동으로 가져오며 네이티브 파일은
-`runtimes/{rid}/native/`에 배치됩니다.
+```csharp
+using Cetz.Renderer;
 
-`CetzProjectBuilder`로 여러 `.typ` 파일과 이미지 같은 바이너리 파일을 메모리에
-구성한 뒤 `RenderProject`로 렌더링할 수 있습니다. `RenderFile`, `RenderSource`,
-`RenderProject`에는 각각 비동기 API가 있습니다. 결과는 `ReadOnlyMemory<byte>`,
-`OpenRead()`, `WriteToDirectory`와 `WriteToDirectoryAsync`로 사용할 수 있습니다.
+using var renderer = new CetzRenderer(new CetzRendererOptions
+{
+    PackageResolution = CetzPackageResolution.EmbeddedOnly
+});
 
-한 렌더러 인스턴스의 호출은 직렬화되며 여러 인스턴스는 병렬로 사용할 수
-있습니다. 취소 토큰은 네이티브 호출을 기다리는 동안의 취소를 보장하지만 이미
-시작된 Typst 컴파일을 중단하지는 않습니다.
+var project = new CetzProjectBuilder()
+    .WithMainFile("charts/main.typ")
+    .AddText("charts/main.typ", """
+        #import "@preview/cetz:0.5.2": canvas, draw
+        #import "data.typ": values
+        #canvas({ draw.rect((0, 0), (values.at(0), 2), fill: blue) })
+        """)
+    .AddText("charts/data.typ", "#let values = (3, 5, 8)")
+    .Build();
 
-시스템 글꼴 검색은 기본 비활성화입니다. 메모리 글꼴과 글꼴 디렉터리는 생성 시
-검증합니다. `BaseDirectory`는 상대 import의 파일 fallback이며, 신뢰할 수 없는
-문서에는 `RestrictToDirectory`를 설정해 네이티브 파일 시스템 루트를 제한합니다.
+var result = renderer.RenderProject(project, new CetzRenderSettings
+{
+    Formats = [CetzOutputFormat.Pdf, CetzOutputFormat.Rgba],
+    Ppi = 96
+});
 
-패키지는 항상 내장 CeTZ 0.5.2와 oxifmt 1.0.0을 먼저 확인합니다.
-`CacheThenNetwork`, `CacheOnly`, `EmbeddedOnly` 모드가 제공됩니다. 일반 NuGet
-사용자는 `NativeLibraryPath`를 설정하지 않으며, 이 옵션은 개발과 진단용입니다.
+ReadOnlyMemory<byte> pdf = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).Data;
+using Stream pdfStream = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).OpenRead();
+await result.WriteToDirectoryAsync("rendered");
+```
+
+`RenderFile`, `RenderSource`, `RenderProject`에는 각각 비동기 대응 메서드가
+있습니다. 렌더러 하나는 호출을 직렬화하며, 여러 렌더러 인스턴스는 병렬로 실행할
+수 있습니다. 취소는 인스턴스를 기다리는 작업을 중지하지만 이미 네이티브 코드에
+진입한 Typst 컴파일을 중단하지는 않습니다.
+
+프로젝트 경로는 정규화된 상대 경로입니다. 절대 경로, `..`, 중복 경로 및 텍스트
+메인 파일 누락은 거부됩니다. 텍스트와 임의의 바이너리 파일을 함께 사용할 수
+있으므로 인메모리 이미지와 import된 `.typ` 모듈에 임시 파일이 필요하지 않습니다.
+
+## 설정
+
+시스템 글꼴 검색은 기본적으로 꺼져 있습니다. `FontPaths`와 `MemoryFonts`는
+렌더러 생성 시 검증됩니다. `BaseDirectory`는 상대 import를 위한 대체 파일을
+제공합니다. 신뢰할 수 없는 문서에는 `RestrictToDirectory`를 설정하세요. 이 경로가
+네이티브 파일 시스템 루트가 됩니다.
+
+패키지 해석은 항상 내장 CeTZ 0.5.2와 oxifmt 1.0.0을 먼저 확인합니다.
+
+- `CacheThenNetwork`: 로컬 Typst 캐시를 확인한 뒤 Typst 패키지 서비스를 사용합니다.
+- `CacheOnly`: 다운로드 없이 로컬 캐시만 사용합니다.
+- `EmbeddedOnly`: 내장 패키지만 사용합니다.
+
+`NativeLibraryPath`는 개발 및 진단용입니다. 일반 NuGet 사용자는 RID 자산을
+사용합니다. 핸들은 `SafeHandle`이 소유하며 Rust 소유 문자열과 결과 버퍼는 공개
+결과가 반환되기 전에 복사되고 해제됩니다.
+
+## 빌드 및 테스트
+
+```powershell
+cargo test --locked
+cargo build --release --locked
+New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
+Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
+dotnet test -c Release
+dotnet pack src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj -c Release -o artifacts/packages
+dotnet build samples/Cetz.Renderer.WinUI.Sample -c Release
+dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
+dotnet pack src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj -c Release -o artifacts/packages
+dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
+./eng/pack-and-verify.ps1 -Rid win-x64
+```
+
+저장소는 Rust `cdylib`에 Typst, CeTZ 및 oxifmt를 직접 링크하며 빌드 또는 실행 시
+`cetz-renderer` 저장소에 의존하지 않습니다.

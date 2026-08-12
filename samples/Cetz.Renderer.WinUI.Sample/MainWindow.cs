@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.Graphics;
 using Windows.UI;
 
 namespace Cetz.Renderer.WinUI.Sample;
@@ -26,7 +27,7 @@ public sealed class MainWindow : Window
     private readonly ComboBox _demoPicker = new()
     {
         ItemsSource = CetzDemoCatalog.All,
-        SelectedIndex = 0,
+        SelectedIndex = 6,
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
     private readonly TextBlock _description = new()
@@ -58,9 +59,18 @@ public sealed class MainWindow : Window
         SelectedIndex = 0,
         MinWidth = 150
     };
+    private readonly ComboBox _qualityPicker = new()
+    {
+        ItemsSource = RasterQualityChoices,
+        SelectedIndex = 2,
+        MinWidth = 145
+    };
     private readonly Button _previousButton = new() { Content = "Previous", Padding = new Thickness(12, 6, 12, 6) };
     private readonly Button _nextButton = new() { Content = "Next", Padding = new Thickness(12, 6, 12, 6) };
+    private readonly TextBox _pageInput = new() { Text = "1", Width = 52, TextAlignment = TextAlignment.Center };
     private readonly TextBlock _pageStatus = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly DispatcherTimer _qualityTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private bool _syncingPageInput;
     private bool _opened;
     private bool _closed;
 
@@ -69,6 +79,7 @@ public sealed class MainWindow : Window
         Title = "Cetz.Renderer WinUI 3 Sample";
         var root = BuildLayout();
         Content = root;
+        AppWindow.Resize(new SizeInt32(1280, 820));
 
         _renderController = new CetzRenderController(
             _view,
@@ -88,6 +99,12 @@ public sealed class MainWindow : Window
         _renderButton.Click += RenderButtonOnClick;
         _zoomModePicker.SelectionChanged += ZoomModePickerOnSelectionChanged;
         _viewModePicker.SelectionChanged += ViewModePickerOnSelectionChanged;
+        _qualityPicker.SelectionChanged += QualityPickerOnSelectionChanged;
+        _qualityTimer.Tick += QualityTimerOnTick;
+        _view.CurrentPageChanged += (_, _) => UpdatePageStatus();
+        _view.ZoomChanged += (_, _) => ScheduleAutomaticQualityRefresh();
+        _pageInput.KeyDown += PageInputOnKeyDown;
+        _pageInput.LostFocus += (_, _) => NavigateFromPageInput();
         _previousButton.Click += PreviousButtonOnClick;
         _nextButton.Click += NextButtonOnClick;
         root.Loaded += RootOnLoaded;
@@ -143,7 +160,9 @@ public sealed class MainWindow : Window
         };
         previewToolbar.Children.Add(_zoomModePicker);
         previewToolbar.Children.Add(_viewModePicker);
+        previewToolbar.Children.Add(_qualityPicker);
         previewToolbar.Children.Add(_previousButton);
+        previewToolbar.Children.Add(_pageInput);
         previewToolbar.Children.Add(_nextButton);
         previewToolbar.Children.Add(_pageStatus);
 
@@ -182,6 +201,10 @@ public sealed class MainWindow : Window
 
     private void RootOnLoaded(object sender, RoutedEventArgs args)
     {
+        var scale = ((FrameworkElement)sender).XamlRoot.RasterizationScale;
+        AppWindow.Resize(new SizeInt32(
+            checked((int)Math.Round(1280 * scale)),
+            checked((int)Math.Round(820 * scale))));
         if (_opened)
             return;
         _opened = true;
@@ -199,14 +222,18 @@ public sealed class MainWindow : Window
         {
             var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text ?? string.Empty),
-                new CetzDocumentRenderOptions { Ppi = 144 });
+                new CetzDocumentRenderOptions
+                {
+                    Ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _view.Zoom)
+                });
             if (document is null || _closed)
                 return;
             var pageLabel = document.Pages.Count == 1 ? "page" : "pages";
-            var status = $"{demo.DisplayName} · {document.Pages.Count} {pageLabel} · {document.Timing.TotalMilliseconds:F0} ms";
+            var status = $"{demo.DisplayName} · {document.Pages.Count} {pageLabel} · {document.Ppi:F0} PPI · {document.Timing.TotalMilliseconds:F0} ms";
             SetStatus(status, Brush(8, 127, 91));
             Title = $"Cetz.Renderer WinUI 3 Sample — {status} · Typst {document.TypstVersion}";
             UpdatePageStatus();
+            ScheduleAutomaticQualityRefresh();
         }
         catch (Exception exception)
         {
@@ -247,7 +274,14 @@ public sealed class MainWindow : Window
     private void UpdatePageStatus()
     {
         var page = _view.PageCount == 0 ? 0 : _view.CurrentPageIndex + 1;
-        _pageStatus.Text = $"Page {page} / {_view.PageCount} · {_view.Zoom:P0}";
+        _syncingPageInput = true;
+        try
+        {
+            _pageInput.Text = Math.Max(1, page).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _pageInput.IsEnabled = _view.PageCount > 0;
+        }
+        finally { _syncingPageInput = false; }
+        _pageStatus.Text = $"/ {_view.PageCount} · {_view.Zoom:P0}";
         _previousButton.IsEnabled = _view.CurrentPageIndex > 0;
         _nextButton.IsEnabled = _view.PageCount > 0 && _view.CurrentPageIndex < _view.PageCount - 1;
     }
@@ -275,9 +309,61 @@ public sealed class MainWindow : Window
     private void WindowOnClosed(object sender, WindowEventArgs args)
     {
         _closed = true;
+        _qualityTimer.Stop();
         _renderController.StateChanged -= RenderControllerOnStateChanged;
         _renderController.Dispose();
         _view.Dispose();
+    }
+
+    private void PageInputOnKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs args)
+    {
+        if (args.Key != Windows.System.VirtualKey.Enter) return;
+        NavigateFromPageInput();
+        args.Handled = true;
+    }
+
+    private void NavigateFromPageInput()
+    {
+        if (_syncingPageInput || _view.PageCount == 0) return;
+        if (int.TryParse(_pageInput.Text, out var pageNumber))
+            _view.GoToPage(Math.Clamp(pageNumber, 1, _view.PageCount) - 1);
+        UpdatePageStatus();
+    }
+
+    private CetzRasterQualityMode SelectedQualityMode =>
+        (_qualityPicker.SelectedItem as RasterQualityChoice)?.Mode ?? CetzRasterQualityMode.Automatic;
+
+    private void QualityPickerOnSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        _qualityTimer.Stop();
+        if (_opened) _ = RenderAsync();
+    }
+
+    private void QualityTimerOnTick(object? sender, object args)
+    {
+        _qualityTimer.Stop();
+        if (_opened) _ = RenderAsync();
+    }
+
+    private void ScheduleAutomaticQualityRefresh()
+    {
+        if (!_opened || SelectedQualityMode != CetzRasterQualityMode.Automatic) return;
+        var ppi = CetzRasterQualityPolicy.ResolvePpi(SelectedQualityMode, _view.Zoom);
+        if (_view.Document is { } document && Math.Abs(document.Ppi - ppi) < 0.5f) return;
+        _qualityTimer.Stop();
+        _qualityTimer.Start();
+    }
+
+    private static readonly RasterQualityChoice[] RasterQualityChoices =
+    [
+        new(CetzRasterQualityMode.Fixed, "Fixed · 144 PPI"),
+        new(CetzRasterQualityMode.HighResolution, "High · 288 PPI"),
+        new(CetzRasterQualityMode.Automatic, "Automatic")
+    ];
+
+    private sealed record RasterQualityChoice(CetzRasterQualityMode Mode, string Label)
+    {
+        public override string ToString() => Label;
     }
 
     private static SolidColorBrush Brush(byte red, byte green, byte blue)
