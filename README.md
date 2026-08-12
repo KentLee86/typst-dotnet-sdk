@@ -20,7 +20,8 @@ framework:
 
 - `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
-- Additional GUI packages can consume the same Core document model.
+- `Cetz.Renderer.WinUI` provides a reusable WinUI 3 `CetzView` on the current
+  stable Windows App SDK. It targets `net8.0-windows10.0.19041.0`.
 
 ## Avalonia
 
@@ -49,6 +50,39 @@ dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
 embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
 Uno, or other GUI demos can reuse the same catalog without copying files again.
+
+## WinUI 3
+
+`CetzView` owns a scrolling multi-page preview. It converts Core's premultiplied
+RGBA pages to WinUI's premultiplied BGRA layout, honors each page's PPI when
+computing device-independent size, and exposes bounded `Zoom` and `PageSpacing`
+dependency properties. Assign `Document` on the UI thread, or use
+`SetDocumentAsync` after rendering on any thread:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.WinUI;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView { Zoom = 1.0, PageSpacing = 24 };
+await view.SetDocumentAsync(document);
+```
+
+The unpackaged x64 sample uses the shared nine-demo catalog and includes an
+editable source pane, render command, status, and scrolling preview:
+
+```powershell
+$env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
+dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
+```
+
+Call `Dispose` on the view from its UI thread before detaching its containing
+visual tree when the host continues running. This clears the document and every
+page image reference. Replacing `Document` also releases the previous page
+images immediately. The sample cancels in-flight work and disposes its renderer
+when its sole application window closes.
 
 ## Memory rendering
 
@@ -115,6 +149,7 @@ cargo build --release --locked
 New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
 Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
+dotnet build samples/Cetz.Renderer.WinUI.Sample -c Release
 dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
 ```

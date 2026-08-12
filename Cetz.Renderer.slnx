@@ -3,15 +3,18 @@
     <Project Path="samples/Cetz.Renderer.Avalonia.Sample/Cetz.Renderer.Avalonia.Sample.csproj" />
     <Project Path="samples/Cetz.Renderer.Demo.Shared/Cetz.Renderer.Demo.Shared.csproj" />
     <Project Path="samples/Cetz.Renderer.Sample/Cetz.Renderer.Sample.csproj" />
+    <Project Path="samples/Cetz.Renderer.WinUI.Sample/Cetz.Renderer.WinUI.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Cetz.Renderer.Avalonia/Cetz.Renderer.Avalonia.csproj" />
     <Project Path="src/Cetz.Renderer.Core/Cetz.Renderer.Core.csproj" />
     <Project Path="src/Cetz.Renderer.Native.linux-x64/Cetz.Renderer.Native.linux-x64.csproj" />
     <Project Path="src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj" />
+    <Project Path="src/Cetz.Renderer.WinUI/Cetz.Renderer.WinUI.csproj" />
     <Project Path="src/Cetz.Renderer/Cetz.Renderer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cetz.Renderer.Tests/Cetz.Renderer.Tests.csproj" />
+    <Project Path="tests/Cetz.Renderer.WinUI.Tests/Cetz.Renderer.WinUI.Tests.csproj" />
   </Folder>
 </Solution>
