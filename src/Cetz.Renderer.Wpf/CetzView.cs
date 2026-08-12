@@ -45,7 +45,6 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         _controller.Changed += ControllerChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-        SizeChanged += OnSizeChanged;
     }
 
     public CetzRenderedDocument? Document
@@ -170,7 +169,6 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
         _controller.Changed -= ControllerChanged;
         Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
-        SizeChanged -= OnSizeChanged;
         _controller.ReleaseDocument();
         ClearBitmaps();
         ClearValue(DocumentProperty);
@@ -249,9 +247,6 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
 
     }
 
-    private void OnSizeChanged(object sender, SizeChangedEventArgs args)
-        => _controller.SetViewport(ActualWidth, ActualHeight);
-
     private void BringCurrentPageIntoView()
     {
         var page = Layout.Pages.FirstOrDefault(candidate => candidate.PageIndex == CurrentPageIndex);
@@ -261,7 +256,6 @@ public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
-        _controller.SetViewport(ActualWidth, ActualHeight);
         if (!_disposed && _bitmaps.Count == 0 && Document is not null)
             RebuildBitmaps();
     }

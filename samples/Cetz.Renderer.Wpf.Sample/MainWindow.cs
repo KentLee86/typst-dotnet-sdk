@@ -67,6 +67,13 @@ public sealed class MainWindow : Window
     private readonly Button _previousButton = new() { Content = "Previous", Padding = new Thickness(12, 5, 12, 5) };
     private readonly Button _nextButton = new() { Content = "Next", Padding = new Thickness(12, 5, 12, 5) };
     private readonly TextBlock _pageIndicator = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 72, TextAlignment = TextAlignment.Center };
+    private readonly ScrollViewer _preview = new()
+    {
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        CanContentScroll = false,
+        Background = BrushFrom("#DDE4EE")
+    };
     private bool _opened;
     private bool _closing;
 
@@ -96,6 +103,10 @@ public sealed class MainWindow : Window
         _viewModePicker.SelectionChanged += ViewModeSelectionChanged;
         _previousButton.Click += PreviousClicked;
         _nextButton.Click += NextClicked;
+        _preview.Content = _view;
+        _preview.Loaded += PreviewViewportChanged;
+        _preview.SizeChanged += PreviewViewportChanged;
+        _preview.ScrollChanged += PreviewScrollChanged;
         Content = BuildLayout();
         ContentRendered += WindowContentRendered;
         Closing += WindowClosing;
@@ -143,15 +154,6 @@ public sealed class MainWindow : Window
         Grid.SetRow(_status, 4);
         editor.Children.Add(_status);
 
-        var preview = new ScrollViewer
-        {
-            Content = _view,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            CanContentScroll = false,
-            Background = BrushFrom("#DDE4EE")
-        };
-
         var previewToolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -170,8 +172,8 @@ public sealed class MainWindow : Window
         previewPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         previewPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         previewPanel.Children.Add(previewToolbar);
-        Grid.SetRow(preview, 1);
-        previewPanel.Children.Add(preview);
+        Grid.SetRow(_preview, 1);
+        previewPanel.Children.Add(_preview);
 
         var split = new Grid();
         split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(430) });
@@ -229,6 +231,21 @@ public sealed class MainWindow : Window
     {
         _view.MoveNext();
         UpdatePageIndicator();
+    }
+
+    private void PreviewViewportChanged(object sender, RoutedEventArgs args) => UpdateViewport();
+
+    private void PreviewScrollChanged(object sender, ScrollChangedEventArgs args)
+    {
+        if (args.ViewportWidthChange != 0 || args.ViewportHeightChange != 0)
+            UpdateViewport();
+    }
+
+    private void UpdateViewport()
+    {
+        var width = _preview.ViewportWidth > 0 ? _preview.ViewportWidth : _preview.ActualWidth;
+        var height = _preview.ViewportHeight > 0 ? _preview.ViewportHeight : _preview.ActualHeight;
+        _view.SetViewport(width, height);
     }
 
     private async Task RenderAsync()

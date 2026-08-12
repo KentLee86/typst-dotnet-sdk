@@ -164,6 +164,80 @@ public sealed class CetzViewTests(CetzRendererFixture fixture) : IClassFixture<C
         });
     }
 
+    [Fact]
+    public void FitPageUsesHostViewportAndIgnoresTheViewsOwnExtent()
+    {
+        RunSta(() =>
+        {
+            var document = fixture.Renderer.RenderSource(
+                "#set page(width: 600pt, height: 900pt, margin: 0pt)\nFit viewport");
+            using var view = new CetzView();
+            view.SetDocument(document);
+            view.SetViewport(400, 300);
+            view.SetZoomMode(CetzZoomMode.FitPage);
+            var hostViewportZoom = view.Zoom;
+
+            view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            view.Arrange(new Rect(0, 0, view.DesiredSize.Width, view.DesiredSize.Height));
+
+            Assert.Equal(hostViewportZoom, view.Zoom, 8);
+            Assert.True(view.Layout.ExtentWidth <= 400.001);
+            Assert.True(view.Layout.ExtentHeight <= 300.001);
+        });
+    }
+
+    [Fact]
+    public void ContinuousNavigationScrollsTheHostViewerToTheSelectedPage()
+    {
+        RunSta(() =>
+        {
+            var document = fixture.Renderer.RenderProject(
+                CetzDemoCatalog.Get("serial-protocol").CreateProject(),
+                new CetzDocumentRenderOptions { Ppi = 48 });
+            using var view = new CetzView();
+            var scrollViewer = new System.Windows.Controls.ScrollViewer
+            {
+                Content = view,
+                Width = 420,
+                Height = 260,
+                CanContentScroll = false,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+            };
+            var window = new Window
+            {
+                Content = scrollViewer,
+                Width = 430,
+                Height = 270,
+                Left = -10000,
+                Top = -10000,
+                ShowActivated = false,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.None
+            };
+            try
+            {
+                window.Show();
+                view.SetDocument(document);
+                view.SetViewMode(CetzPageViewMode.ContinuousSingle);
+                view.SetViewport(scrollViewer.ViewportWidth, scrollViewer.ViewportHeight);
+                window.UpdateLayout();
+                Assert.Equal(0, scrollViewer.VerticalOffset);
+
+                view.GoToPage(2);
+                Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+                window.UpdateLayout();
+
+                Assert.Equal(2, view.CurrentPageIndex);
+                Assert.True(scrollViewer.VerticalOffset > 0,
+                    $"Expected navigation to scroll, actual offset was {scrollViewer.VerticalOffset}.");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? failure = null;
