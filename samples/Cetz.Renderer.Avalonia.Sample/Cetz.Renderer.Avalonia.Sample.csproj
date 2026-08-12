@@ -9,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cetz.Renderer.Avalonia\Cetz.Renderer.Avalonia.csproj" />
+    <ProjectReference Include="..\Cetz.Renderer.Demo.Shared\Cetz.Renderer.Demo.Shared.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\artifacts\native\win-x64\cetz_dotnet_native.dll"

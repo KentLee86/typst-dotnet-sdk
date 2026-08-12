@@ -46,6 +46,10 @@ Run the interactive editor and preview sample from the repository root:
 dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 ```
 
+The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
+embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
+Uno, or other GUI demos can reuse the same catalog without copying files again.
+
 ## Memory rendering
 
 ```csharp

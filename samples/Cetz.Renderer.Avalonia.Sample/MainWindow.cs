@@ -3,37 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cetz.Renderer.Core;
+using Cetz.Renderer.Demo.Shared;
 
 namespace Cetz.Renderer.Avalonia.Sample;
 
 public sealed class MainWindow : Window
 {
-    private const string ExampleSource = """
-        #import "@preview/cetz:0.5.2": canvas, draw
-        #set page(width: 520pt, height: 330pt, margin: 26pt, fill: rgb("f8fafc"))
-        #set text(font: "Noto Sans KR", fill: rgb("172033"))
-        #align(center)[
-          #text(size: 20pt, weight: "bold")[CeTZ · Avalonia]
-          #v(5pt)
-          #text(size: 10pt, fill: rgb("667085"))[네이티브 core에서 렌더링한 실제 화면]
-        ]
-        #v(16pt)
-        #canvas(length: 1cm, {
-          draw.rect((0, 0), (11, 4.4), radius: .25, fill: rgb("ffffff"), stroke: rgb("d8e0ef"))
-          draw.circle((2.0, 2.2), radius: 1.1, fill: rgb("4f7cff"))
-          draw.circle((5.5, 2.2), radius: 1.1, fill: rgb("8b5cf6"))
-          draw.circle((9.0, 2.2), radius: 1.1, fill: rgb("10b981"))
-          draw.line((3.15, 2.2), (4.35, 2.2), stroke: rgb("94a3b8"))
-          draw.line((6.65, 2.2), (7.85, 2.2), stroke: rgb("94a3b8"))
-        })
-        #v(8pt)
-        #grid(columns: (1fr, 1fr, 1fr), align: center,
-          text(weight: "bold")[Core],
-          text(weight: "bold")[RGBA],
-          text(weight: "bold")[Avalonia],
-        )
-        """;
-
     private readonly CetzDocumentRenderer _renderer;
     private readonly global::Cetz.Renderer.Avalonia.CetzView _view = new()
     {
@@ -42,13 +17,24 @@ public sealed class MainWindow : Window
     };
     private readonly TextBox _source = new()
     {
-        Text = ExampleSource,
         AcceptsReturn = true,
         FontFamily = FontFamily.Default,
         FontSize = 13
     };
+    private readonly ComboBox _demoPicker = new()
+    {
+        ItemsSource = CetzDemoCatalog.All,
+        SelectedIndex = 1,
+        HorizontalAlignment = HorizontalAlignment.Stretch
+    };
+    private readonly TextBlock _description = new()
+    {
+        Foreground = Brushes.SlateGray,
+        TextWrapping = TextWrapping.Wrap
+    };
     private readonly TextBlock _status = new() { Text = "준비", Foreground = Brushes.SlateGray };
     private readonly Button _renderButton = new() { Content = "렌더링", HorizontalAlignment = HorizontalAlignment.Right };
+    private bool _opened;
 
     public MainWindow()
     {
@@ -65,10 +51,21 @@ public sealed class MainWindow : Window
             PackageResolution = CetzPackageResolution.EmbeddedOnly
         });
 
+        SelectDemo();
+        _demoPicker.SelectionChanged += async (_, _) =>
+        {
+            SelectDemo();
+            if (_opened)
+                await RenderAsync();
+        };
         _renderButton.Click += async (_, _) => await RenderAsync();
         Closed += (_, _) => _renderer.Dispose();
         Content = BuildLayout();
-        Opened += async (_, _) => await RenderAsync();
+        Opened += async (_, _) =>
+        {
+            _opened = true;
+            await RenderAsync();
+        };
     }
 
     private Control BuildLayout()
@@ -84,16 +81,27 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_renderButton, 1);
         editorHeader.Children.Add(_renderButton);
 
+        var demoSelector = new StackPanel { Spacing = 6 };
+        demoSelector.Children.Add(new TextBlock
+        {
+            Text = "Demo resource",
+            FontWeight = FontWeight.SemiBold
+        });
+        demoSelector.Children.Add(_demoPicker);
+        demoSelector.Children.Add(_description);
+
         var editor = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"),
             Margin = new Thickness(22),
             RowSpacing = 12
         };
+        editor.Children.Add(demoSelector);
+        Grid.SetRow(editorHeader, 1);
         editor.Children.Add(editorHeader);
-        Grid.SetRow(_source, 1);
+        Grid.SetRow(_source, 2);
         editor.Children.Add(_source);
-        Grid.SetRow(_status, 2);
+        Grid.SetRow(_status, 3);
         editor.Children.Add(_status);
 
         var preview = new ScrollViewer
@@ -119,18 +127,22 @@ public sealed class MainWindow : Window
 
     private async Task RenderAsync()
     {
+        if (_demoPicker.SelectedItem is not CetzDemo demo)
+            return;
+
         _renderButton.IsEnabled = false;
+        _demoPicker.IsEnabled = false;
         _status.Text = "렌더링 중…";
         _status.Foreground = Brushes.SlateGray;
         try
         {
-            var document = await _renderer.RenderSourceAsync(
-                _source.Text ?? string.Empty,
+            var document = await _renderer.RenderProjectAsync(
+                demo.CreateProject(_source.Text ?? string.Empty),
                 options: new CetzDocumentRenderOptions { Ppi = 144 });
             _view.Document = document;
-            _status.Text = $"{document.Pages.Count} page · {document.Timing.TotalMilliseconds:F0} ms · Typst {document.TypstVersion}";
+            _status.Text = $"{demo.DisplayName} · {document.Pages.Count} page · {document.Timing.TotalMilliseconds:F0} ms";
             _status.Foreground = new SolidColorBrush(Color.Parse("#087F5B"));
-            Title = $"Cetz.Renderer Avalonia Sample — {_status.Text}";
+            Title = $"Cetz.Renderer Avalonia Sample — {_status.Text} · Typst {document.TypstVersion}";
         }
         catch (Exception exception)
         {
@@ -141,7 +153,16 @@ public sealed class MainWindow : Window
         finally
         {
             _renderButton.IsEnabled = true;
+            _demoPicker.IsEnabled = true;
         }
+    }
+
+    private void SelectDemo()
+    {
+        if (_demoPicker.SelectedItem is not CetzDemo demo)
+            return;
+        _source.Text = demo.Source;
+        _description.Text = demo.Description;
     }
 
     private static string ResolveNativeLibrary()
