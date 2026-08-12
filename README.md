@@ -21,6 +21,9 @@ framework:
 - `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
 - Additional GUI packages can consume the same Core document model.
+- GUI adapters share one view/rendering contract; see
+  [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
+  navigation, lifecycle, and demo requirements.
 
 ## Avalonia
 
