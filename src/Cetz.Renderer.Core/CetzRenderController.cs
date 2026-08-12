@@ -15,6 +15,7 @@ public sealed class CetzRenderController : IDisposable
     private long _generation;
     private bool _isRendering;
     private bool _disposed;
+    private Exception? _lastError;
 
     public CetzRenderController(
         ICetzDocumentView view,
@@ -29,7 +30,7 @@ public sealed class CetzRenderController : IDisposable
     public event EventHandler? StateChanged;
 
     public bool IsRendering { get { lock (_sync) return _isRendering; } }
-    public Exception? LastError { get; private set; }
+    public Exception? LastError { get { lock (_sync) return _lastError; } }
 
     public Task<CetzRenderedDocument?> RenderSourceAsync(string source, string virtualPath = "main.typ",
         CetzDocumentRenderOptions? options = null, CancellationToken cancellationToken = default)
@@ -76,7 +77,7 @@ public sealed class CetzRenderController : IDisposable
             _activeRender = cancellation;
             generation = ++_generation;
             _isRendering = true;
-            LastError = null;
+            _lastError = null;
         }
         RaiseStateChanged();
 
@@ -84,7 +85,14 @@ public sealed class CetzRenderController : IDisposable
         {
             var document = await render(cancellation.Token).ConfigureAwait(false);
             if (!IsCurrent(generation, cancellation)) return null;
-            await InvokeViewAsync(() => _view.SetDocument(document), cancellation.Token).ConfigureAwait(false);
+            await InvokeViewAsync(() =>
+            {
+                lock (_sync)
+                {
+                    if (_disposed || generation != _generation || cancellation.IsCancellationRequested) return;
+                    _view.SetDocument(document);
+                }
+            }, cancellation.Token).ConfigureAwait(false);
             return IsCurrent(generation, cancellation) ? document : null;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
@@ -93,7 +101,11 @@ public sealed class CetzRenderController : IDisposable
         }
         catch (Exception exception)
         {
-            if (IsCurrent(generation, cancellation)) LastError = exception;
+            lock (_sync)
+            {
+                if (_disposed || generation != _generation || cancellation.IsCancellationRequested) return null;
+                _lastError = exception;
+            }
             throw;
         }
         finally
@@ -143,9 +155,20 @@ public sealed class CetzRenderController : IDisposable
 
     private void RaiseStateChanged()
     {
+        void RaiseSafely()
+        {
+            var handlers = StateChanged;
+            if (handlers is null) return;
+            foreach (EventHandler handler in handlers.GetInvocationList())
+            {
+                try { handler(this, EventArgs.Empty); }
+                catch { }
+            }
+        }
+
         if (_viewContext is null || ReferenceEquals(SynchronizationContext.Current, _viewContext))
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            RaiseSafely();
         else
-            _viewContext.Post(_ => StateChanged?.Invoke(this, EventArgs.Empty), null);
+            _viewContext.Post(_ => RaiseSafely(), null);
     }
 }

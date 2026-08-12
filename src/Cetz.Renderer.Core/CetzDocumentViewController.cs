@@ -39,7 +39,7 @@ public sealed class CetzDocumentViewController
         ArgumentNullException.ThrowIfNull(document);
         if (ReferenceEquals(_document, document)) return;
         _document = document;
-        _currentPageIndex = ClampPage(_currentPageIndex);
+        _currentPageIndex = SpreadStart(ClampPage(_currentPageIndex));
         RebuildLayout();
     }
 
