@@ -43,7 +43,9 @@ $unoZip = [System.IO.Compression.ZipFile]::OpenRead($unoPackage)
 try {
     $entries = $unoZip.Entries.FullName
     $unoFrameworks = @('net8.0', 'net8.0-desktop1.0')
-    if ($Rid -eq 'win-x64') { $unoFrameworks += 'net8.0-windows10.0.26100' }
+    if ($entries -contains 'lib/net8.0-windows10.0.26100/Typst.Renderer.Uno.dll') {
+        $unoFrameworks += 'net8.0-windows10.0.26100'
+    }
     foreach ($framework in $unoFrameworks) {
         $assembly = "lib/$framework/Typst.Renderer.Uno.dll"
         if (-not ($entries -contains $assembly)) { throw "Uno package does not contain $assembly" }
