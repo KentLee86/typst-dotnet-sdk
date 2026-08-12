@@ -21,13 +21,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          [xml]$versions = Get-Content eng/Versions.props
+          $metadata = $versions.Project.PropertyGroup
+          $nativeTag = "native-v$($metadata.NativeVersion)"
           $fingerprint = ./eng/native-fingerprint.ps1
-          if ($fingerprint -ne $manifest.sourceFingerprint) {
+          if ($fingerprint -ne $metadata.NativeSourceFingerprint) {
             throw 'Native source changed without bumping the pinned native release.'
           }
-          gh release view $manifest.tag --repo '${{ github.repository }}' | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw "Pinned native release $($manifest.tag) does not exist." }
+          gh release view $nativeTag --repo '${{ github.repository }}' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Pinned native release $nativeTag does not exist." }
 
   publish:
     needs: verify
@@ -46,14 +48,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          [xml]$versions = Get-Content eng/Versions.props
+          $nativeTag = "native-v$($versions.Project.PropertyGroup.NativeVersion)"
           New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
           New-Item -ItemType Directory -Force artifacts/native/linux-x64 | Out-Null
-          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'typst_dotnet_native.dll' --dir artifacts/native/win-x64
+          gh release download $nativeTag --repo '${{ github.repository }}' --pattern 'typst_dotnet_native.dll' --dir artifacts/native/win-x64
           if ($LASTEXITCODE -ne 0) { throw 'Failed to download the pinned Windows native binary.' }
-          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'libtypst_dotnet_native.so' --dir artifacts/native/linux-x64
+          gh release download $nativeTag --repo '${{ github.repository }}' --pattern 'libtypst_dotnet_native.so' --dir artifacts/native/linux-x64
           if ($LASTEXITCODE -ne 0) { throw 'Failed to download the pinned Linux native binary.' }
-          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir artifacts/native
+          gh release download $nativeTag --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir artifacts/native
           if ($LASTEXITCODE -ne 0) { throw 'Failed to download native checksums.' }
           foreach ($binary in @(
             'artifacts/native/win-x64/typst_dotnet_native.dll',
@@ -67,8 +70,8 @@ jobs:
       - name: Validate release version
         shell: pwsh
         run: |
-          [xml]$props = Get-Content Directory.Build.props
-          $packageVersion = [string]$props.Project.PropertyGroup.Version
+          [xml]$props = Get-Content eng/Versions.props
+          $packageVersion = [string]$props.Project.PropertyGroup.SdkVersion
           $tagVersion = '${{ github.ref_name }}'.TrimStart('v')
           if ($packageVersion -ne $tagVersion) {
             throw "Tag version $tagVersion does not match package version $packageVersion."

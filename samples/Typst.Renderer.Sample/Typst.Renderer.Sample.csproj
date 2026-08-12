@@ -3,7 +3,11 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <ProjectReference Include="..\..\src\Typst.Renderer\Typst.Renderer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' == 'true'">
+    <PackageReference Include="Typst.Renderer" Version="[$(PublishedPackageVersion)]" />
+    <PackageReference Include="$(PublishedNativePackageId)" Version="[$(PublishedPackageVersion)]" />
   </ItemGroup>
 </Project>

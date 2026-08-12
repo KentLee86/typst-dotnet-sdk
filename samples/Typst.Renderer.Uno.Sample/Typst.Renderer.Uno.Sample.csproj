@@ -5,18 +5,23 @@
     <UnoSingleProject>true</UnoSingleProject>
     <ApplicationTitle>Typst.Renderer Uno Sample</ApplicationTitle>
     <ApplicationId>com.kentlee86.cetzrenderer.uno.sample</ApplicationId>
-    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>$(SdkVersion)</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationPublisher>KentLee86</ApplicationPublisher>
     <DefaultLanguage>en-US</DefaultLanguage>
     <Description>Interactive Uno Platform sample for Typst.Renderer.</Description>
     <UnoFeatures />
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <ProjectReference Include="..\..\src\Typst.Renderer.Uno\Typst.Renderer.Uno.csproj" />
     <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' == 'true'">
+    <PackageReference Include="Typst.Renderer.Uno" Version="[$(PublishedPackageVersion)]" />
+    <PackageReference Include="$(PublishedNativePackageId)" Version="[$(PublishedPackageVersion)]" />
+    <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <None Include="..\..\artifacts\native\win-x64\typst_dotnet_native.dll"
           Link="typst_dotnet_native.dll"
           CopyToOutputDirectory="PreserveNewest"

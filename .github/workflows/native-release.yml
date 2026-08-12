@@ -15,22 +15,28 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      rust-toolchain: ${{ steps.metadata.outputs.rust-toolchain }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate native release metadata
+        id: metadata
         shell: pwsh
         run: |
-          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
-          if ($manifest.tag -ne '${{ github.ref_name }}') {
-            throw "Tag ${{ github.ref_name }} does not match pinned tag $($manifest.tag)."
+          [xml]$versions = Get-Content eng/Versions.props
+          $metadata = $versions.Project.PropertyGroup
+          $nativeTag = "native-v$($metadata.NativeVersion)"
+          if ($nativeTag -ne '${{ github.ref_name }}') {
+            throw "Tag ${{ github.ref_name }} does not match pinned tag $nativeTag."
           }
           $fingerprint = ./eng/native-fingerprint.ps1
-          if ($fingerprint -ne $manifest.sourceFingerprint) {
-            throw "Native source fingerprint changed. Expected $($manifest.sourceFingerprint), got $fingerprint."
+          if ($fingerprint -ne $metadata.NativeSourceFingerprint) {
+            throw "Native source fingerprint changed. Expected $($metadata.NativeSourceFingerprint), got $fingerprint."
           }
+          "rust-toolchain=$($metadata.RustToolchainVersion)" >> $env:GITHUB_OUTPUT
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89
+          toolchain: ${{ steps.metadata.outputs.rust-toolchain }}
           components: rustfmt, clippy
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -51,16 +57,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89
+          toolchain: ${{ needs.verify.outputs.rust-toolchain }}
       - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**', 'native/typst-dotnet-native/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-release-${{ needs.verify.outputs.rust-toolchain }}-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**', 'native/typst-dotnet-native/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-release-1.89-
+            ${{ runner.os }}-cargo-release-${{ needs.verify.outputs.rust-toolchain }}-
       - run: cargo build --release --locked
       - shell: pwsh
         run: Copy-Item "target/release/${{ matrix.library }}" "${{ matrix.library }}"
@@ -88,7 +94,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          Copy-Item eng/native-release.json artifacts/native-release/native-release.json
+          Copy-Item eng/Versions.props artifacts/native-release/Versions.props
           $binaries = @(Get-ChildItem artifacts/native-release -File | Where-Object Name -Match '^(lib)?typst_dotnet_native\.(dll|so)$')
           $checksums = foreach ($binary in $binaries) {
             "$((Get-FileHash $binary.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($binary.Name)"
@@ -99,5 +105,5 @@ jobs:
             --repo '${{ github.repository }}' `
             --verify-tag `
             --title 'Typst.Renderer native ${{ github.ref_name }}' `
-            --notes 'Pinned native runtime binaries. Immutable; bump eng/native-release.json for any native source or toolchain change.'
+            --notes 'Pinned native runtime binaries. Immutable; bump NativeVersion and NativeSourceFingerprint in eng/Versions.props for any native source or toolchain change.'
           if ($LASTEXITCODE -ne 0) { throw 'Native GitHub release creation failed.' }

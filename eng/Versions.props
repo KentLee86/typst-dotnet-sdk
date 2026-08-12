@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <SdkVersion>0.1.0</SdkVersion>
+    <NativeVersion>0.1.0</NativeVersion>
+    <RustToolchainVersion>1.89</RustToolchainVersion>
+    <NativeSourceFingerprint>00b3f2ce2ddf2d651e31af838e859804bb209e734b2ba22ff1330f68d59c888d</NativeSourceFingerprint>
+  </PropertyGroup>
+</Project>

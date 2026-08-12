@@ -1,5 +1,6 @@
 /target/
 /artifacts/
+/rendered/
 /src/**/bin/
 /src/**/obj/
 /tests/**/bin/

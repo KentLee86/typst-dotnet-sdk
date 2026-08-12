@@ -8,7 +8,7 @@
     <TypstNativePackage Condition="'$(TypstNativePackage)' == ''">Typst.Renderer.Native.win-x64</TypstNativePackage>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="$(TypstNativePackage)" Version="0.1.0" />
-    <PackageReference Include="Typst.Renderer.Wpf" Version="0.1.0" />
+    <PackageReference Include="$(TypstNativePackage)" Version="[$(TypstPackageVersion)]" />
+    <PackageReference Include="Typst.Renderer.Wpf" Version="[$(TypstPackageVersion)]" />
   </ItemGroup>
 </Project>

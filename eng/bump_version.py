@@ -34,23 +34,11 @@ def replace_required(path: Path, old: str, new: str, *, count: int = 0) -> bool:
     return True
 
 
-def update_package_version(text: str, package_name: str, old: str, new: str) -> str:
-    pattern = re.compile(
-        rf'(name\s*=\s*"{re.escape(package_name)}"\s*\r?\nversion\s*=\s*")'
-        rf"{re.escape(old)}"
-        rf'(")'
-    )
-    updated, count = pattern.subn(rf"\g<1>{new}\g<2>", text, count=1)
-    if count != 1:
-        raise RuntimeError(f"Could not update package version for {package_name}")
-    return updated
-
-
 def current_version() -> str:
-    props = read(ROOT / "Directory.Build.props")
-    match = re.search(r"<Version>([^<]+)</Version>", props)
+    props = read(ROOT / "eng/Versions.props")
+    match = re.search(r"<SdkVersion>([^<]+)</SdkVersion>", props)
     if not match:
-        raise RuntimeError("Directory.Build.props does not contain <Version>.")
+        raise RuntimeError("eng/Versions.props does not contain <SdkVersion>.")
     return match.group(1)
 
 
@@ -69,50 +57,30 @@ def main() -> int:
         print(f"Version is already {new}; nothing to update.")
         return 0
 
-    direct_files = [
-        ROOT / "Directory.Build.props",
-        ROOT / "eng/pack-and-verify.ps1",
-        ROOT / "eng/consumer/CleanConsumer.csproj",
-        ROOT / "eng/consumer-wpf/CleanWpfConsumer.csproj",
-        ROOT / "eng/uno-consumer/UnoConsumer.csproj",
-        ROOT / "eng/winforms-consumer/WinFormsConsumer.csproj",
-        ROOT / "eng/winui-consumer/CleanWinUiConsumer.csproj",
-        ROOT / "samples/Typst.Renderer.Uno.Sample/Typst.Renderer.Uno.Sample.csproj",
-        ROOT / "src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.nuspec",
-        ROOT / "src/Typst.Renderer.Native.linux-x64/Typst.Renderer.Native.linux-x64.nuspec",
-    ]
     readme_files = [ROOT / "README.md", ROOT / "README.ko.md"]
 
-    missing = [path.relative_to(ROOT) for path in direct_files + readme_files if not path.is_file()]
+    versions_props = ROOT / "eng/Versions.props"
+    missing = [path.relative_to(ROOT) for path in [versions_props, *readme_files] if not path.is_file()]
     if missing:
         raise RuntimeError(f"Missing version-managed file(s): {', '.join(map(str, missing))}")
 
     print(f"Bumping repository version {old} -> {new}")
-    for path in direct_files:
-        if old not in read(path):
-            raise RuntimeError(f"Expected {old} in {path.relative_to(ROOT)}")
-        print(f"  {path.relative_to(ROOT)}")
+    print(f"  {versions_props.relative_to(ROOT)}")
     for path in readme_files:
         if f'Version="{old}"' not in read(path):
             raise RuntimeError(f"Expected package version {old} in {path.relative_to(ROOT)}")
         print(f"  {path.relative_to(ROOT)}")
 
-    cargo_toml = ROOT / "native/typst-dotnet-native/Cargo.toml"
-    cargo_lock = ROOT / "Cargo.lock"
-    cargo_toml_updated = update_package_version(read(cargo_toml), "typst-dotnet-native", old, new)
-    cargo_lock_updated = update_package_version(read(cargo_lock), "typst-dotnet-native", old, new)
-    print(f"  {cargo_toml.relative_to(ROOT)}")
-    print(f"  {cargo_lock.relative_to(ROOT)}")
-
     if args.dry_run:
         return 0
 
-    for path in direct_files:
-        replace_required(path, old, new)
+    versions_text = read(versions_props)
+    sdk_version = f"<SdkVersion>{old}</SdkVersion>"
+    if versions_text.count(sdk_version) != 1:
+        raise RuntimeError("Expected exactly one current <SdkVersion> in eng/Versions.props")
+    write(versions_props, versions_text.replace(sdk_version, f"<SdkVersion>{new}</SdkVersion>"))
     for path in readme_files:
         replace_required(path, f'Version="{old}"', f'Version="{new}"')
-    write(cargo_toml, cargo_toml_updated)
-    write(cargo_lock, cargo_lock_updated)
     print("Version bump complete.")
     return 0
 

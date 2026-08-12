@@ -296,16 +296,38 @@ strings and result buffers are copied and released before public results return.
 Install [just](https://just.systems/) and run:
 
 ```shell
+just version
 just native
 just verify
 just pack
+just test-published
 ```
+
+[`eng/Versions.props`](eng/Versions.props) is the single release metadata file.
+It defines the SDK package version, pinned native binary version, Rust
+toolchain, and native source fingerprint. MSBuild, `just`, package validation,
+and GitHub release workflows all read this file. The native GitHub Release tag
+is derived as `native-v{NativeVersion}`.
 
 `just native` detects `win-x64` or `linux-x64`, builds the Rust release library,
 and stages it under `artifacts/native/{rid}/`. `just verify` also runs Rust
 formatting, Clippy, Rust tests, and the managed test suite. `just pack` performs
 the RID package inspection and clean NuGet consumer validation and requires
 Windows PowerShell on Windows or `pwsh` on Linux.
+
+Samples use local `ProjectReference` projects by default. To verify an exact
+published NuGet version with the same sample source, enable package mode:
+
+```shell
+just test-published             # uses SdkVersion from eng/Versions.props
+just test-published version=0.1.0
+dotnet run --project samples/Typst.Renderer.Sample -c Release -p:UsePublishedPackages=true -p:PublishedPackageVersion=0.1.0
+dotnet build samples/Typst.Renderer.Avalonia.Sample -c Release -p:UsePublishedPackages=true -p:PublishedPackageVersion=0.1.0
+```
+
+On Windows and Linux, package mode automatically selects the matching x64
+native package. Override it with `-p:PublishedNativePackageId=...` when needed.
+Omit `UsePublishedPackages` to return to the normal local-development path.
 
 Release preparation is automated as well:
 

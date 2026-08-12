@@ -13,33 +13,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check pinned native source fingerprint
-        id: native-source
+      - name: Read version metadata and check native source
+        id: metadata
         shell: pwsh
         run: |
-          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          [xml]$versions = Get-Content eng/Versions.props
+          $metadata = $versions.Project.PropertyGroup
           $fingerprint = ./eng/native-fingerprint.ps1
-          "changed=$($fingerprint -ne $manifest.sourceFingerprint)".ToLowerInvariant() >> $env:GITHUB_OUTPUT
-      - if: steps.native-source.outputs.changed == 'true'
+          "changed=$($fingerprint -ne $metadata.NativeSourceFingerprint)".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+          "rust-toolchain=$($metadata.RustToolchainVersion)" >> $env:GITHUB_OUTPUT
+      - if: steps.metadata.outputs.changed == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89
+          toolchain: ${{ steps.metadata.outputs.rust-toolchain }}
           components: rustfmt, clippy
-      - if: steps.native-source.outputs.changed == 'true'
+      - if: steps.metadata.outputs.changed == 'true'
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-verify-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-verify-${{ steps.metadata.outputs.rust-toolchain }}-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-verify-1.89-
-      - if: steps.native-source.outputs.changed == 'true'
+            ${{ runner.os }}-cargo-verify-${{ steps.metadata.outputs.rust-toolchain }}-
+      - if: steps.metadata.outputs.changed == 'true'
         run: cargo fmt --all -- --check
-      - if: steps.native-source.outputs.changed == 'true'
+      - if: steps.metadata.outputs.changed == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - if: steps.native-source.outputs.changed == 'true'
+      - if: steps.metadata.outputs.changed == 'true'
         run: cargo test --workspace --locked
 
   native:
@@ -56,6 +58,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version metadata
+        id: metadata
+        shell: pwsh
+        run: |
+          [xml]$versions = Get-Content eng/Versions.props
+          $metadata = $versions.Project.PropertyGroup
+          "native-tag=native-v$($metadata.NativeVersion)" >> $env:GITHUB_OUTPUT
+          "rust-toolchain=$($metadata.RustToolchainVersion)" >> $env:GITHUB_OUTPUT
       - name: Restore pinned native binary
         id: native-release
         shell: pwsh
@@ -63,15 +73,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
-          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
           New-Item -ItemType Directory -Force 'artifacts/native/${{ matrix.rid }}' | Out-Null
-          gh release download $manifest.tag `
+          gh release download '${{ steps.metadata.outputs.native-tag }}' `
             --repo '${{ github.repository }}' `
             --pattern '${{ matrix.library }}' `
             --dir 'artifacts/native/${{ matrix.rid }}'
           $restored = $LASTEXITCODE -eq 0
           if ($restored) {
-            gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir 'artifacts/native/${{ matrix.rid }}'
+            gh release download '${{ steps.metadata.outputs.native-tag }}' --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir 'artifacts/native/${{ matrix.rid }}'
             $restored = $LASTEXITCODE -eq 0
           }
           if ($restored) {
@@ -84,7 +93,7 @@ jobs:
       - if: steps.native-release.outputs.restored != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89
+          toolchain: ${{ steps.metadata.outputs.rust-toolchain }}
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -95,9 +104,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-release-${{ steps.metadata.outputs.rust-toolchain }}-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-release-1.89-
+            ${{ runner.os }}-cargo-release-${{ steps.metadata.outputs.rust-toolchain }}-
       - if: steps.native-release.outputs.restored != 'true'
         run: cargo build --release --locked
       - shell: pwsh

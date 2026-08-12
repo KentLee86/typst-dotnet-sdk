@@ -4,8 +4,11 @@
     <IsPackable>false</IsPackable>
     <RootNamespace>Typst.Renderer.Demo.Shared</RootNamespace>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <ProjectReference Include="..\..\src\Typst.Renderer\Typst.Renderer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' == 'true'">
+    <PackageReference Include="Typst.Renderer" Version="[$(PublishedPackageVersion)]" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\**\*" />

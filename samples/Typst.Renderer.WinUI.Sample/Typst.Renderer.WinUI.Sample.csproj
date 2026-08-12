@@ -12,11 +12,16 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(WindowsAppSdkVersion)" />
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <ProjectReference Include="..\..\src\Typst.Renderer.WinUI\Typst.Renderer.WinUI.csproj" />
     <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' == 'true'">
+    <PackageReference Include="Typst.Renderer.WinUI" Version="[$(PublishedPackageVersion)]" />
+    <PackageReference Include="$(PublishedNativePackageId)" Version="[$(PublishedPackageVersion)]" />
+    <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePublishedPackages)' != 'true'">
     <None Include="..\..\artifacts\native\win-x64\typst_dotnet_native.dll"
           Link="typst_dotnet_native.dll"
           CopyToOutputDirectory="PreserveNewest"

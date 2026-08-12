@@ -296,16 +296,38 @@ await result.WriteToDirectoryAsync("rendered");
 [just](https://just.systems/)를 설치한 뒤 다음 명령을 실행합니다.
 
 ```shell
+just version
 just native
 just verify
 just pack
+just test-published
 ```
+
+[`eng/Versions.props`](eng/Versions.props)가 단일 릴리스 메타데이터 파일입니다.
+SDK 패키지 버전, 고정된 네이티브 바이너리 버전, Rust 툴체인, 네이티브
+소스 지문을 정의합니다. MSBuild, `just`, 패키지 검증, GitHub 릴리스
+워크플로가 모두 이 파일을 읽습니다. 네이티브 GitHub Release 태그는
+`native-v{NativeVersion}` 형식으로 파생됩니다.
 
 `just native`는 `win-x64` 또는 `linux-x64` RID를 감지하고 Rust release
 라이브러리를 빌드한 뒤 `artifacts/native/{rid}/`에 배치합니다. `just verify`는
 Rust 포맷 검사, Clippy, Rust 테스트와 관리 코드 테스트까지 실행합니다.
 `just pack`은 RID 패키지 검사와 깨끗한 NuGet 소비자 검증을 수행하며 Windows에서는
 Windows PowerShell, Linux에서는 `pwsh`가 필요합니다.
+
+샘플은 기본적으로 로컬 `ProjectReference` 프로젝트를 사용합니다. 같은 샘플
+소스로 게시된 특정 NuGet 버전을 검증하려면 패키지 모드를 켭니다.
+
+```shell
+just test-published             # eng/Versions.props의 SdkVersion 사용
+just test-published version=0.1.0
+dotnet run --project samples/Typst.Renderer.Sample -c Release -p:UsePublishedPackages=true -p:PublishedPackageVersion=0.1.0
+dotnet build samples/Typst.Renderer.Avalonia.Sample -c Release -p:UsePublishedPackages=true -p:PublishedPackageVersion=0.1.0
+```
+
+Windows와 Linux에서는 패키지 모드가 현재 OS에 맞는 x64 네이티브 패키지를
+자동으로 선택합니다. 필요하면 `-p:PublishedNativePackageId=...`로 바꿀 수
+있습니다. `UsePublishedPackages`를 생략하면 일반 로컬 개발 경로로 돌아갑니다.
 
 릴리스 준비도 자동화되어 있습니다.
 

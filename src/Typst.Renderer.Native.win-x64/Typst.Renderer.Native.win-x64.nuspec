@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>Typst.Renderer.Native.win-x64</id>
-    <version>0.1.0</version>
+    <version>$version$</version>
     <authors>KentLee86</authors>
     <description>Windows x64 native runtime for Typst.Renderer</description>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <repository type="git" url="https://github.com/KentLee86/typst-dotnet-sdk" />
     <dependencies>
       <group targetFramework="net8.0">
-        <dependency id="Typst.Renderer" version="[0.1.0]" />
+        <dependency id="Typst.Renderer" version="[$version$]" />
       </group>
     </dependencies>
   </metadata>

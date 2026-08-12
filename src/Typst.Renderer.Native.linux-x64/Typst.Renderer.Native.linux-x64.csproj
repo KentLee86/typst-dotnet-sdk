@@ -5,6 +5,7 @@
     <Description>Linux x64 native runtime for Typst.Renderer</Description>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NuspecFile>Typst.Renderer.Native.linux-x64.nuspec</NuspecFile>
+    <NuspecProperties>version=$(Version)</NuspecProperties>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Typst.Renderer\Typst.Renderer.csproj" PrivateAssets="all" />
