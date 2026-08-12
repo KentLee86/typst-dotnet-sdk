@@ -5,6 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
+    <PackageReference Include="Typst.Renderer.Uno" Version="0.1.0" />
   </ItemGroup>
 </Project>

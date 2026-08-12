@@ -1,14 +1,14 @@
-using Cetz.Renderer.Core;
-using Cetz.Renderer.WinUI;
+using Typst.Renderer.Core;
+using Typst.Renderer.WinUI;
 
 namespace CleanWinUiConsumer;
 
 public sealed class ConsumerControl
 {
-    public ICetzDocumentView CreateView() => new CetzView
+    public ITypstDocumentView CreateView() => new TypstView
     {
-        ZoomMode = CetzZoomMode.FitWidth,
-        ViewMode = CetzPageViewMode.ContinuousFacing,
+        ZoomMode = TypstZoomMode.FitWidth,
+        ViewMode = TypstPageViewMode.ContinuousFacing,
         PageSpacing = 20
     };
 }

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Typst.Renderer.Avalonia\Typst.Renderer.Avalonia.csproj" />
+    <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\artifacts\native\win-x64\typst_dotnet_native.dll"
+          Link="typst_dotnet_native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\win-x64\typst_dotnet_native.dll')" />
+    <None Include="..\..\artifacts\native\linux-x64\libtypst_dotnet_native.so"
+          Link="libtypst_dotnet_native.so"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\linux-x64\libtypst_dotnet_native.so')" />
+  </ItemGroup>
+</Project>

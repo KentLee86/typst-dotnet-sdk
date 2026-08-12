@@ -1,0 +1,29 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Typst.Renderer.Avalonia.Sample/Typst.Renderer.Avalonia.Sample.csproj" />
+    <Project Path="samples/Typst.Renderer.Demo.Shared/Typst.Renderer.Demo.Shared.csproj" />
+    <Project Path="samples/Typst.Renderer.Sample/Typst.Renderer.Sample.csproj" />
+    <Project Path="samples/Typst.Renderer.Uno.Sample/Typst.Renderer.Uno.Sample.csproj" />
+    <Project Path="samples/Typst.Renderer.WinForms.Sample/Typst.Renderer.WinForms.Sample.csproj" />
+    <Project Path="samples/Typst.Renderer.Wpf.Sample/Typst.Renderer.Wpf.Sample.csproj" />
+    <Project Path="samples/Typst.Renderer.WinUI.Sample/Typst.Renderer.WinUI.Sample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Typst.Renderer.Avalonia/Typst.Renderer.Avalonia.csproj" />
+    <Project Path="src/Typst.Renderer.Core/Typst.Renderer.Core.csproj" />
+    <Project Path="src/Typst.Renderer.Uno/Typst.Renderer.Uno.csproj" />
+    <Project Path="src/Typst.Renderer.Native.linux-x64/Typst.Renderer.Native.linux-x64.csproj" />
+    <Project Path="src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.csproj" />
+    <Project Path="src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj" />
+    <Project Path="src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj" />
+    <Project Path="src/Typst.Renderer.WinUI/Typst.Renderer.WinUI.csproj" />
+    <Project Path="src/Typst.Renderer/Typst.Renderer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Typst.Renderer.Avalonia.Tests/Typst.Renderer.Avalonia.Tests.csproj" />
+    <Project Path="tests/Typst.Renderer.Tests/Typst.Renderer.Tests.csproj" />
+    <Project Path="tests/Typst.Renderer.WinForms.Tests/Typst.Renderer.WinForms.Tests.csproj" />
+    <Project Path="tests/Typst.Renderer.Wpf.Tests/Typst.Renderer.Wpf.Tests.csproj" />
+    <Project Path="tests/Typst.Renderer.WinUI.Tests/Typst.Renderer.WinUI.Tests.csproj" />
+  </Folder>
+</Solution>

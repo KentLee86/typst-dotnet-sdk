@@ -3,10 +3,10 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <CetzNativePackage Condition="'$(CetzNativePackage)' == ''">Cetz.Renderer.Native.win-x64</CetzNativePackage>
+    <TypstNativePackage Condition="'$(TypstNativePackage)' == ''">Typst.Renderer.Native.win-x64</TypstNativePackage>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Cetz.Renderer.WinForms" Version="0.1.0" />
-    <PackageReference Include="$(CetzNativePackage)" Version="0.1.0" />
+    <PackageReference Include="Typst.Renderer.WinForms" Version="0.1.0" />
+    <PackageReference Include="$(TypstNativePackage)" Version="0.1.0" />
   </ItemGroup>
 </Project>

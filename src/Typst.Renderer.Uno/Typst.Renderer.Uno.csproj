@@ -1,0 +1,16 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net8.0-windows10.0.26100;net8.0-desktop</TargetFrameworks>
+    <UnoSingleProject>true</UnoSingleProject>
+    <OutputType>Library</OutputType>
+    <GenerateLibraryLayout>true</GenerateLibraryLayout>
+    <IsPackable>true</IsPackable>
+    <PackageId>Typst.Renderer.Uno</PackageId>
+    <Description>Uno Platform controls for Typst.Renderer.Core documents</Description>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Typst.Renderer.Core\Typst.Renderer.Core.csproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

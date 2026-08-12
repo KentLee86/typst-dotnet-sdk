@@ -5,10 +5,10 @@
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
-    <CetzNativePackage Condition="'$(CetzNativePackage)' == ''">Cetz.Renderer.Native.win-x64</CetzNativePackage>
+    <TypstNativePackage Condition="'$(TypstNativePackage)' == ''">Typst.Renderer.Native.win-x64</TypstNativePackage>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="$(CetzNativePackage)" Version="0.1.0" />
-    <PackageReference Include="Cetz.Renderer.Wpf" Version="0.1.0" />
+    <PackageReference Include="$(TypstNativePackage)" Version="0.1.0" />
+    <PackageReference Include="Typst.Renderer.Wpf" Version="0.1.0" />
   </ItemGroup>
 </Project>

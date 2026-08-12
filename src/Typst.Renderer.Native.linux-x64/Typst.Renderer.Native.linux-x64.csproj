@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>Typst.Renderer.Native.linux-x64</PackageId>
+    <Description>Linux x64 native runtime for Typst.Renderer</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NuspecFile>Typst.Renderer.Native.linux-x64.nuspec</NuspecFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Typst.Renderer\Typst.Renderer.csproj" PrivateAssets="all" />
+    <None Include="_._" Pack="true" PackagePath="lib/net8.0/" />
+    <None Include="..\..\artifacts\native\linux-x64\libtypst_dotnet_native.so" Pack="true" PackagePath="runtimes/linux-x64/native/" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

@@ -205,7 +205,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cetz-dotnet-native"
+name = "typst-dotnet-native"
 version = "0.1.0"
 dependencies = [
  "anyhow",

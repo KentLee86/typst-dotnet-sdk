@@ -1,17 +1,16 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
 jobs:
-  test:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            library: cetz_dotnet_native.dll
-          - os: ubuntu-latest
-            rid: linux-x64
-            library: libcetz_dotnet_native.so
-    runs-on: ${{ matrix.os }}
+  verify:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -21,15 +20,54 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: cargo fmt -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --locked
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-verify-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-verify-1.89-
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: dotnet test tests/Typst.Renderer.Tests/Typst.Renderer.Tests.csproj -c Release
+
+  native:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            library: typst_dotnet_native.dll
+          - os: ubuntu-latest
+            rid: linux-x64
+            library: libtypst_dotnet_native.so
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-1.89-
       - run: cargo build --release --locked
       - shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "artifacts/native/${{ matrix.rid }}" | Out-Null
           Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
-          $env:CETZ_NATIVE_LIBRARY = (Resolve-Path "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}")
-          dotnet test tests/Cetz.Renderer.Tests/Cetz.Renderer.Tests.csproj -c Release
+          $env:TYPST_NATIVE_LIBRARY = (Resolve-Path "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}")
+          dotnet test tests/Typst.Renderer.Tests/Typst.Renderer.Tests.csproj -c Release
       - shell: pwsh
         run: ./eng/pack-and-verify.ps1 -Rid ${{ matrix.rid }}

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PackageId>Typst.Renderer.WinForms</PackageId>
+    <Description>Windows Forms controls for Typst.Renderer.Core documents</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Typst.Renderer.Core\Typst.Renderer.Core.csproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

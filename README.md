@@ -1,4 +1,4 @@
-# Cetz.Renderer
+# Typst.Renderer
 
 [한국어](README.ko.md)
 
@@ -11,24 +11,24 @@ memory. It never starts `typst.exe`, `cetz-render`, Node, or Sharp.
 Reference one runtime package. It brings the exact matching managed package:
 
 ```xml
-<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
-Use `Cetz.Renderer.Native.linux-x64` on Linux x64. Native assets follow NuGet's
+Use `Typst.Renderer.Native.linux-x64` on Linux x64. Native assets follow NuGet's
 `runtimes/{rid}/native/` convention.
 
 GUI integrations are layered so the native SDK stays independent from every UI
 framework:
 
-- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents
+- `Typst.Renderer.Core` turns renderer results into display-ready RGBA documents
   and owns the shared render, zoom, layout, view-mode, and navigation behavior.
-- `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
-- `Cetz.Renderer.Uno` displays those documents with a reusable WinUI/Uno
-  `CetzView`.
-- `Cetz.Renderer.WinForms` provides a native Windows Forms `CetzView` with DPI-aware
+- `Typst.Renderer.Avalonia` displays those documents with a reusable `TypstView`.
+- `Typst.Renderer.Uno` displays those documents with a reusable WinUI/Uno
+  `TypstView`.
+- `Typst.Renderer.WinForms` provides a native Windows Forms `TypstView` with DPI-aware
   zooming and scrolling multi-page layout.
-- `Cetz.Renderer.Wpf` displays the same documents in a reusable WPF `CetzView`.
-- `Cetz.Renderer.WinUI` provides a reusable WinUI 3 `CetzView` on the current
+- `Typst.Renderer.Wpf` displays the same documents in a reusable WPF `TypstView`.
+- `Typst.Renderer.WinUI` provides a reusable WinUI 3 `TypstView` on the current
   stable Windows App SDK. It targets `net8.0-windows10.0.19041.0`.
 - GUI adapters share one view/rendering contract; see
   [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
@@ -37,30 +37,30 @@ framework:
 ## GUI samples
 
 The primary desktop sample screenshots below use the same window size and render
-the same nine-page `Serial protocol` project from `Cetz.Renderer.Demo.Shared`.
+the same nine-page `Serial protocol` project from `Typst.Renderer.Demo.Shared`.
 The second Avalonia screenshot shows its additional live quotation workflow.
 
-| [Avalonia](samples/Cetz.Renderer.Avalonia.Sample/) |
+| [Avalonia](samples/Typst.Renderer.Avalonia.Sample/) |
 | --- |
 | ![Avalonia sample rendering the Serial protocol demo](docs/assets/sample-avalonia.jpg) |
 
-| [Avalonia — Dynamic quotation](samples/Cetz.Renderer.Avalonia.Sample/) |
+| [Avalonia — Dynamic quotation](samples/Typst.Renderer.Avalonia.Sample/) |
 | --- |
 | ![Avalonia sample rendering the live dynamic quotation](docs/assets/sample-avalonia-dynamic-quotation.jpg) |
 
-| [Uno Platform](samples/Cetz.Renderer.Uno.Sample/) |
+| [Uno Platform](samples/Typst.Renderer.Uno.Sample/) |
 | --- |
 | ![Uno sample rendering the Serial protocol demo](docs/assets/sample-uno.jpg) |
 
-| [Windows Forms](samples/Cetz.Renderer.WinForms.Sample/) |
+| [Windows Forms](samples/Typst.Renderer.WinForms.Sample/) |
 | --- |
 | ![Windows Forms sample rendering the Serial protocol demo](docs/assets/sample-winforms.jpg) |
 
-| [WPF](samples/Cetz.Renderer.Wpf.Sample/) |
+| [WPF](samples/Typst.Renderer.Wpf.Sample/) |
 | --- |
 | ![WPF sample rendering the Serial protocol demo](docs/assets/sample-wpf.jpg) |
 
-| [WinUI 3](samples/Cetz.Renderer.WinUI.Sample/) |
+| [WinUI 3](samples/Typst.Renderer.WinUI.Sample/) |
 | --- |
 | ![WinUI 3 sample rendering the Serial protocol demo](docs/assets/sample-winui3.jpg) |
 
@@ -69,13 +69,13 @@ The second Avalonia screenshot shows its additional live quotation workflow.
 Render through the common Core layer and assign the result to the Avalonia view:
 
 ```csharp
-using Cetz.Renderer.Avalonia;
-using Cetz.Renderer.Core;
+using Typst.Renderer.Avalonia;
+using Typst.Renderer.Core;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Document = document,
     Zoom = 1.0
@@ -85,11 +85,11 @@ var view = new CetzView
 Run the interactive editor and preview sample from the repository root:
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
-dotnet run --project samples/Cetz.Renderer.Avalonia.Sample -- --demo live-quotation
+dotnet run --project samples/Typst.Renderer.Avalonia.Sample
+dotnet run --project samples/Typst.Renderer.Avalonia.Sample -- --demo live-quotation
 ```
 
-The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
+The sample's demo selector is backed by `Typst.Renderer.Demo.Shared`. Its nine
 embedded examples are UI-independent in-memory projects, so every GUI demo can
 reuse the same catalog without copying files again. The Avalonia-only
 `Dynamic quotation` example also exposes editable recipient fields and
@@ -97,17 +97,17 @@ automatically refreshes both the Typst source and rendered preview.
 
 ## WPF
 
-`Cetz.Renderer.Wpf` targets `net8.0-windows` and has no third-party runtime
+`Typst.Renderer.Wpf` targets `net8.0-windows` and has no third-party runtime
 dependency. Place its view in a WPF `ScrollViewer` for multi-page scrolling:
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.Wpf;
+using Typst.Renderer.Core;
+using Typst.Renderer.Wpf;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Document = document,
     Zoom = 1.0,
@@ -124,7 +124,7 @@ deterministically.
 Run the editable nine-demo WPF sample from the repository root:
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Wpf.Sample
+dotnet run --project samples/Typst.Renderer.Wpf.Sample
 ```
 
 Pass `-- --software-rendering` when a remote desktop or capture environment
@@ -135,38 +135,38 @@ cannot record WPF's hardware-composited client area.
 Reference the UI adapter in addition to the native RID package:
 
 ```xml
-<PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
-<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Uno" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
-The Uno adapter implements the shared `ICetzDocumentView` contract and delegates
+The Uno adapter implements the shared `ITypstDocumentView` contract and delegates
 zoom fitting, page modes, navigation, and exact placement to
-`CetzDocumentViewController`. It converts premultiplied RGBA pages to WinUI's
+`TypstDocumentViewController`. It converts premultiplied RGBA pages to WinUI's
 premultiplied BGRA layout; the adapter owns only Uno bitmap and visual resources:
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.Uno;
+using Typst.Renderer.Core;
+using Typst.Renderer.Uno;
 
-var view = new CetzView();
+var view = new TypstView();
 view.SetViewport(1200, 800);
-using var renderController = new CetzRenderController(view);
+using var renderController = new TypstRenderController(view);
 await renderController.RenderSourceAsync(typstSource);
-view.SetZoomMode(CetzZoomMode.FitWidth);
-view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+view.SetZoomMode(TypstZoomMode.FitWidth);
+view.SetViewMode(TypstPageViewMode.ContinuousFacing);
 view.MoveNext();
 ```
 
 Run the desktop Uno editor and scrolling multi-page preview from the repository
-root. It uses the same nine `Cetz.Renderer.Demo.Shared` examples as the Avalonia
+root. It uses the same nine `Typst.Renderer.Demo.Shared` examples as the Avalonia
 sample and exposes custom/width/page zoom, continuous/single/facing page modes,
 and previous/next navigation:
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
+dotnet run --project samples/Typst.Renderer.Uno.Sample -f net8.0-desktop
 ```
 
-Set `CETZ_NATIVE_LIBRARY` to a built `cetz_dotnet_native.dll` when it is not
+Set `TYPST_NATIVE_LIBRARY` to a built `typst_dotnet_native.dll` when it is not
 available under `artifacts/native/win-x64/` before building the sample.
 The verified targets are `net8.0-desktop` (Skia Desktop) and
 `net8.0-windows10.0.26100` (Windows App SDK). The adapter package also contains
@@ -180,13 +180,13 @@ premultiplied BGRA bitmaps, preserves alpha, and combines render PPI with the
 monitor DPI and `Zoom` when laying out pages:
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.WinForms;
+using Typst.Renderer.Core;
+using Typst.Renderer.WinForms;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Dock = DockStyle.Fill,
     Document = document,
@@ -195,56 +195,56 @@ var view = new CetzView
 };
 ```
 
-`CetzView` owns its converted bitmaps and disposes them when the document changes
+`TypstView` owns its converted bitmaps and disposes them when the document changes
 or the control is disposed. Its built-in scrolling surface paints only visible
 pages. Run the Windows Forms editor and multi-page preview from the repository root:
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.WinForms.Sample
+dotnet run --project samples/Typst.Renderer.WinForms.Sample
 ```
 
-All GUI samples reuse all nine projects in `Cetz.Renderer.Demo.Shared`, including
+All GUI samples reuse all nine projects in `Typst.Renderer.Demo.Shared`, including
 multi-file imports, embedded SVG assets, and multi-page documents.
 
 ## WinUI 3
 
-`CetzView` implements `ICetzDocumentView` and delegates fitting, page modes,
-navigation, and exact page bounds to `CetzDocumentViewController`. The WinUI
+`TypstView` implements `ITypstDocumentView` and delegates fitting, page modes,
+navigation, and exact page bounds to `TypstDocumentViewController`. The WinUI
 adapter owns only native image resources, UI dispatch, and scrolling:
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.WinUI;
+using Typst.Renderer.Core;
+using Typst.Renderer.WinUI;
 
-var view = new CetzView
+var view = new TypstView
 {
-    ZoomMode = CetzZoomMode.FitWidth,
-    ViewMode = CetzPageViewMode.ContinuousFacing,
+    ZoomMode = TypstZoomMode.FitWidth,
+    ViewMode = TypstPageViewMode.ContinuousFacing,
     PageSpacing = 24
 };
 await view.SetDocumentAsync(document);
 view.MoveNext();
 ```
 
-The unpackaged x64 sample uses `CetzRenderController`, the shared nine-demo
+The unpackaged x64 sample uses `TypstRenderController`, the shared nine-demo
 catalog, all fitting and page modes, navigation, and page status:
 
 ```powershell
-$env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
-dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
+$env:TYPST_NATIVE_LIBRARY = 'C:\path\to\typst_dotnet_native.dll'
+dotnet run --project samples/Typst.Renderer.WinUI.Sample -c Release
 ```
 
 ## Memory rendering
 
 ```csharp
-using Cetz.Renderer;
+using Typst.Renderer;
 
-using var renderer = new CetzRenderer(new CetzRendererOptions
+using var renderer = new TypstRenderer(new TypstRendererOptions
 {
-    PackageResolution = CetzPackageResolution.EmbeddedOnly
+    PackageResolution = TypstPackageResolution.EmbeddedOnly
 });
 
-var project = new CetzProjectBuilder()
+var project = new TypstProjectBuilder()
     .WithMainFile("charts/main.typ")
     .AddText("charts/main.typ", """
         #import "@preview/cetz:0.5.2": canvas, draw
@@ -254,14 +254,14 @@ var project = new CetzProjectBuilder()
     .AddText("charts/data.typ", "#let values = (3, 5, 8)")
     .Build();
 
-var result = renderer.RenderProject(project, new CetzRenderSettings
+var result = renderer.RenderProject(project, new TypstRenderSettings
 {
-    Formats = [CetzOutputFormat.Pdf, CetzOutputFormat.Rgba],
+    Formats = [TypstOutputFormat.Pdf, TypstOutputFormat.Rgba],
     Ppi = 96
 });
 
-ReadOnlyMemory<byte> pdf = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).Data;
-using Stream pdfStream = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).OpenRead();
+ReadOnlyMemory<byte> pdf = result.Artifacts.Single(x => x.Format == TypstOutputFormat.Pdf).Data;
+using Stream pdfStream = result.Artifacts.Single(x => x.Format == TypstOutputFormat.Pdf).OpenRead();
 await result.WriteToDirectoryAsync("rendered");
 ```
 
@@ -297,13 +297,13 @@ strings and result buffers are copied and released before public results return.
 cargo test --locked
 cargo build --release --locked
 New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
-Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
+Copy-Item target/release/typst_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
-dotnet pack src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj -c Release -o artifacts/packages
-dotnet build samples/Cetz.Renderer.WinUI.Sample -c Release
-dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
-dotnet pack src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj -c Release -o artifacts/packages
-dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj -c Release -o artifacts/packages
+dotnet build samples/Typst.Renderer.WinUI.Sample -c Release
+dotnet pack src/Typst.Renderer/Typst.Renderer.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
 ./eng/pack-and-verify.ps1 -Rid win-x64
 ```
 

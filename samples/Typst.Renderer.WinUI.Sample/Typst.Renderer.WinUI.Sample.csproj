@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(WindowsAppSdkVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Typst.Renderer.WinUI\Typst.Renderer.WinUI.csproj" />
+    <ProjectReference Include="..\Typst.Renderer.Demo.Shared\Typst.Renderer.Demo.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\artifacts\native\win-x64\typst_dotnet_native.dll"
+          Link="typst_dotnet_native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\win-x64\typst_dotnet_native.dll')" />
+  </ItemGroup>
+</Project>

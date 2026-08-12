@@ -1,4 +1,4 @@
-# Cetz.Renderer
+# Typst.Renderer
 
 [English](README.md)
 
@@ -12,24 +12,24 @@ Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 운영 �
 런타임 패키지 하나를 참조하면 정확히 일치하는 관리 패키지가 함께 설치됩니다.
 
 ```xml
-<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
-Linux x64에서는 `Cetz.Renderer.Native.linux-x64`를 사용합니다. 네이티브 자산은
+Linux x64에서는 `Typst.Renderer.Native.linux-x64`를 사용합니다. 네이티브 자산은
 NuGet의 `runtimes/{rid}/native/` 규칙을 따릅니다.
 
 네이티브 SDK가 모든 UI 프레임워크로부터 독립성을 유지하도록 GUI 통합 계층을
 분리했습니다.
 
-- `Cetz.Renderer.Core`는 렌더러 결과를 화면 표시용 RGBA 문서로 변환하며 공통
+- `Typst.Renderer.Core`는 렌더러 결과를 화면 표시용 RGBA 문서로 변환하며 공통
   렌더링, 확대/축소, 레이아웃, 보기 모드 및 탐색 동작을 담당합니다.
-- `Cetz.Renderer.Avalonia`는 재사용 가능한 `CetzView`로 문서를 표시합니다.
-- `Cetz.Renderer.Uno`는 재사용 가능한 WinUI/Uno `CetzView`로 문서를 표시합니다.
-- `Cetz.Renderer.WinForms`는 DPI 인식 확대/축소와 다중 페이지 스크롤을 지원하는
-  Windows Forms 네이티브 `CetzView`를 제공합니다.
-- `Cetz.Renderer.Wpf`는 같은 문서를 재사용 가능한 WPF `CetzView`로 표시합니다.
-- `Cetz.Renderer.WinUI`는 현재 안정 버전 Windows App SDK 기반의 재사용 가능한
-  WinUI 3 `CetzView`를 제공합니다. 대상 프레임워크는
+- `Typst.Renderer.Avalonia`는 재사용 가능한 `TypstView`로 문서를 표시합니다.
+- `Typst.Renderer.Uno`는 재사용 가능한 WinUI/Uno `TypstView`로 문서를 표시합니다.
+- `Typst.Renderer.WinForms`는 DPI 인식 확대/축소와 다중 페이지 스크롤을 지원하는
+  Windows Forms 네이티브 `TypstView`를 제공합니다.
+- `Typst.Renderer.Wpf`는 같은 문서를 재사용 가능한 WPF `TypstView`로 표시합니다.
+- `Typst.Renderer.WinUI`는 현재 안정 버전 Windows App SDK 기반의 재사용 가능한
+  WinUI 3 `TypstView`를 제공합니다. 대상 프레임워크는
   `net8.0-windows10.0.19041.0`입니다.
 - 모든 GUI 어댑터는 하나의 보기/렌더링 계약을 공유합니다. 맞춤, 페이지 모드,
   탐색, 수명 주기 및 데모 요구사항은
@@ -38,30 +38,30 @@ NuGet의 `runtimes/{rid}/native/` 규칙을 따릅니다.
 ## GUI 샘플
 
 아래 데스크톱 샘플의 기본 화면은 모두 같은 창 크기를 사용하며
-`Cetz.Renderer.Demo.Shared`의 동일한 9페이지 `Serial protocol` 프로젝트를
+`Typst.Renderer.Demo.Shared`의 동일한 9페이지 `Serial protocol` 프로젝트를
 렌더링합니다. 두 번째 Avalonia 화면은 추가된 실시간 견적서 작업 흐름입니다.
 
-| [Avalonia](samples/Cetz.Renderer.Avalonia.Sample/) |
+| [Avalonia](samples/Typst.Renderer.Avalonia.Sample/) |
 | --- |
 | ![Serial protocol 데모를 렌더링한 Avalonia 샘플](docs/assets/sample-avalonia.jpg) |
 
-| [Avalonia — 동적 견적서](samples/Cetz.Renderer.Avalonia.Sample/) |
+| [Avalonia — 동적 견적서](samples/Typst.Renderer.Avalonia.Sample/) |
 | --- |
 | ![실시간 동적 견적서를 렌더링한 Avalonia 샘플](docs/assets/sample-avalonia-dynamic-quotation.jpg) |
 
-| [Uno Platform](samples/Cetz.Renderer.Uno.Sample/) |
+| [Uno Platform](samples/Typst.Renderer.Uno.Sample/) |
 | --- |
 | ![Serial protocol 데모를 렌더링한 Uno 샘플](docs/assets/sample-uno.jpg) |
 
-| [Windows Forms](samples/Cetz.Renderer.WinForms.Sample/) |
+| [Windows Forms](samples/Typst.Renderer.WinForms.Sample/) |
 | --- |
 | ![Serial protocol 데모를 렌더링한 Windows Forms 샘플](docs/assets/sample-winforms.jpg) |
 
-| [WPF](samples/Cetz.Renderer.Wpf.Sample/) |
+| [WPF](samples/Typst.Renderer.Wpf.Sample/) |
 | --- |
 | ![Serial protocol 데모를 렌더링한 WPF 샘플](docs/assets/sample-wpf.jpg) |
 
-| [WinUI 3](samples/Cetz.Renderer.WinUI.Sample/) |
+| [WinUI 3](samples/Typst.Renderer.WinUI.Sample/) |
 | --- |
 | ![Serial protocol 데모를 렌더링한 WinUI 3 샘플](docs/assets/sample-winui3.jpg) |
 
@@ -70,13 +70,13 @@ NuGet의 `runtimes/{rid}/native/` 규칙을 따릅니다.
 공통 Core 계층으로 렌더링한 결과를 Avalonia 뷰에 할당합니다.
 
 ```csharp
-using Cetz.Renderer.Avalonia;
-using Cetz.Renderer.Core;
+using Typst.Renderer.Avalonia;
+using Typst.Renderer.Core;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Document = document,
     Zoom = 1.0
@@ -86,29 +86,29 @@ var view = new CetzView
 저장소 루트에서 편집기와 미리보기 대화형 샘플을 실행합니다.
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
-dotnet run --project samples/Cetz.Renderer.Avalonia.Sample -- --demo live-quotation
+dotnet run --project samples/Typst.Renderer.Avalonia.Sample
+dotnet run --project samples/Typst.Renderer.Avalonia.Sample -- --demo live-quotation
 ```
 
-샘플의 데모 선택기는 `Cetz.Renderer.Demo.Shared`를 사용합니다. 내장된 9개 예제는
+샘플의 데모 선택기는 `Typst.Renderer.Demo.Shared`를 사용합니다. 내장된 9개 예제는
 UI와 독립적인 인메모리 프로젝트이므로 모든 GUI 데모가 파일을 복사하지 않고
 동일한 카탈로그를 재사용합니다. Avalonia 전용 `동적 견적서` 예제는 편집 가능한
 공급받는자 필드를 제공하며 Typst 원본과 렌더링 미리보기를 자동으로 갱신합니다.
 
 ## WPF
 
-`Cetz.Renderer.Wpf`는 `net8.0-windows`를 대상으로 하며 별도 서드파티 런타임
+`Typst.Renderer.Wpf`는 `net8.0-windows`를 대상으로 하며 별도 서드파티 런타임
 의존성이 없습니다. 다중 페이지 스크롤을 사용하려면 WPF `ScrollViewer` 안에
 뷰를 배치합니다.
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.Wpf;
+using Typst.Renderer.Core;
+using Typst.Renderer.Wpf;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Document = document,
     Zoom = 1.0,
@@ -124,7 +124,7 @@ var preview = new System.Windows.Controls.ScrollViewer { Content = view };
 저장소 루트에서 편집 가능한 9개 데모 WPF 샘플을 실행합니다.
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Wpf.Sample
+dotnet run --project samples/Typst.Renderer.Wpf.Sample
 ```
 
 원격 데스크톱 또는 캡처 환경에서 WPF 하드웨어 합성 클라이언트 영역을 기록할 수
@@ -135,39 +135,39 @@ dotnet run --project samples/Cetz.Renderer.Wpf.Sample
 네이티브 RID 패키지와 함께 UI 어댑터를 참조합니다.
 
 ```xml
-<PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
-<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Uno" Version="0.1.0" />
+<PackageReference Include="Typst.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
-Uno 어댑터는 공통 `ICetzDocumentView` 계약을 구현하고 확대/축소 맞춤, 페이지
-모드, 탐색 및 정확한 배치를 `CetzDocumentViewController`에 위임합니다.
+Uno 어댑터는 공통 `ITypstDocumentView` 계약을 구현하고 확대/축소 맞춤, 페이지
+모드, 탐색 및 정확한 배치를 `TypstDocumentViewController`에 위임합니다.
 premultiplied RGBA 페이지를 WinUI의 premultiplied BGRA 배열로 변환하며,
 어댑터는 Uno 비트맵과 시각적 리소스만 소유합니다.
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.Uno;
+using Typst.Renderer.Core;
+using Typst.Renderer.Uno;
 
-var view = new CetzView();
+var view = new TypstView();
 view.SetViewport(1200, 800);
-using var renderController = new CetzRenderController(view);
+using var renderController = new TypstRenderController(view);
 await renderController.RenderSourceAsync(typstSource);
-view.SetZoomMode(CetzZoomMode.FitWidth);
-view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+view.SetZoomMode(TypstZoomMode.FitWidth);
+view.SetViewMode(TypstPageViewMode.ContinuousFacing);
 view.MoveNext();
 ```
 
 저장소 루트에서 데스크톱 Uno 편집기와 다중 페이지 스크롤 미리보기를 실행합니다.
-Avalonia 샘플과 동일한 9개 `Cetz.Renderer.Demo.Shared` 예제를 사용하며 사용자 지정,
+Avalonia 샘플과 동일한 9개 `Typst.Renderer.Demo.Shared` 예제를 사용하며 사용자 지정,
 폭 맞춤, 쪽 맞춤 확대/축소와 연속, 한 페이지, 두 페이지 보기 모드 및 이전/다음
 탐색을 제공합니다.
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
+dotnet run --project samples/Typst.Renderer.Uno.Sample -f net8.0-desktop
 ```
 
 샘플 빌드 전에 `artifacts/native/win-x64/`에 네이티브 라이브러리가 없다면
-`CETZ_NATIVE_LIBRARY`를 빌드된 `cetz_dotnet_native.dll`로 설정합니다. 검증된
+`TYPST_NATIVE_LIBRARY`를 빌드된 `typst_dotnet_native.dll`로 설정합니다. 검증된
 대상은 `net8.0-desktop`(Skia Desktop)과
 `net8.0-windows10.0.26100`(Windows App SDK)입니다. 어댑터 패키지에는 다른 Uno
 헤드를 위한 프레임워크 중립 `net8.0` 자산도 포함됩니다.
@@ -180,13 +180,13 @@ premultiplied BGRA 비트맵으로 복사하고 알파를 보존하며, 페이�
 모니터 DPI 및 `Zoom`을 결합합니다.
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.WinForms;
+using Typst.Renderer.Core;
+using Typst.Renderer.WinForms;
 
-using var renderer = new CetzDocumentRenderer();
+using var renderer = new TypstDocumentRenderer();
 var document = await renderer.RenderSourceAsync(typstSource);
 
-var view = new CetzView
+var view = new TypstView
 {
     Dock = DockStyle.Fill,
     Document = document,
@@ -195,56 +195,56 @@ var view = new CetzView
 };
 ```
 
-`CetzView`는 변환한 비트맵을 소유하고 문서가 바뀌거나 컨트롤이 Dispose될 때
+`TypstView`는 변환한 비트맵을 소유하고 문서가 바뀌거나 컨트롤이 Dispose될 때
 해제합니다. 내장 스크롤 표면은 보이는 페이지만 그립니다. 저장소 루트에서
 Windows Forms 편집기와 다중 페이지 미리보기를 실행합니다.
 
 ```powershell
-dotnet run --project samples/Cetz.Renderer.WinForms.Sample
+dotnet run --project samples/Typst.Renderer.WinForms.Sample
 ```
 
 모든 GUI 샘플은 다중 파일 import, 내장 SVG 자산 및 다중 페이지 문서를 포함하는
-`Cetz.Renderer.Demo.Shared`의 9개 프로젝트를 모두 재사용합니다.
+`Typst.Renderer.Demo.Shared`의 9개 프로젝트를 모두 재사용합니다.
 
 ## WinUI 3
 
-`CetzView`는 `ICetzDocumentView`를 구현하고 맞춤, 페이지 모드, 탐색 및 정확한
-페이지 경계를 `CetzDocumentViewController`에 위임합니다. WinUI 어댑터는
+`TypstView`는 `ITypstDocumentView`를 구현하고 맞춤, 페이지 모드, 탐색 및 정확한
+페이지 경계를 `TypstDocumentViewController`에 위임합니다. WinUI 어댑터는
 네이티브 이미지 리소스, UI 디스패치 및 스크롤만 담당합니다.
 
 ```csharp
-using Cetz.Renderer.Core;
-using Cetz.Renderer.WinUI;
+using Typst.Renderer.Core;
+using Typst.Renderer.WinUI;
 
-var view = new CetzView
+var view = new TypstView
 {
-    ZoomMode = CetzZoomMode.FitWidth,
-    ViewMode = CetzPageViewMode.ContinuousFacing,
+    ZoomMode = TypstZoomMode.FitWidth,
+    ViewMode = TypstPageViewMode.ContinuousFacing,
     PageSpacing = 24
 };
 await view.SetDocumentAsync(document);
 view.MoveNext();
 ```
 
-unpackaged x64 샘플은 `CetzRenderController`, 공통 9개 데모 카탈로그, 모든 맞춤
+unpackaged x64 샘플은 `TypstRenderController`, 공통 9개 데모 카탈로그, 모든 맞춤
 및 페이지 모드, 탐색과 페이지 상태를 사용합니다.
 
 ```powershell
-$env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
-dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
+$env:TYPST_NATIVE_LIBRARY = 'C:\path\to\typst_dotnet_native.dll'
+dotnet run --project samples/Typst.Renderer.WinUI.Sample -c Release
 ```
 
 ## 메모리 렌더링
 
 ```csharp
-using Cetz.Renderer;
+using Typst.Renderer;
 
-using var renderer = new CetzRenderer(new CetzRendererOptions
+using var renderer = new TypstRenderer(new TypstRendererOptions
 {
-    PackageResolution = CetzPackageResolution.EmbeddedOnly
+    PackageResolution = TypstPackageResolution.EmbeddedOnly
 });
 
-var project = new CetzProjectBuilder()
+var project = new TypstProjectBuilder()
     .WithMainFile("charts/main.typ")
     .AddText("charts/main.typ", """
         #import "@preview/cetz:0.5.2": canvas, draw
@@ -254,14 +254,14 @@ var project = new CetzProjectBuilder()
     .AddText("charts/data.typ", "#let values = (3, 5, 8)")
     .Build();
 
-var result = renderer.RenderProject(project, new CetzRenderSettings
+var result = renderer.RenderProject(project, new TypstRenderSettings
 {
-    Formats = [CetzOutputFormat.Pdf, CetzOutputFormat.Rgba],
+    Formats = [TypstOutputFormat.Pdf, TypstOutputFormat.Rgba],
     Ppi = 96
 });
 
-ReadOnlyMemory<byte> pdf = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).Data;
-using Stream pdfStream = result.Artifacts.Single(x => x.Format == CetzOutputFormat.Pdf).OpenRead();
+ReadOnlyMemory<byte> pdf = result.Artifacts.Single(x => x.Format == TypstOutputFormat.Pdf).Data;
+using Stream pdfStream = result.Artifacts.Single(x => x.Format == TypstOutputFormat.Pdf).OpenRead();
 await result.WriteToDirectoryAsync("rendered");
 ```
 
@@ -297,13 +297,13 @@ await result.WriteToDirectoryAsync("rendered");
 cargo test --locked
 cargo build --release --locked
 New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
-Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
+Copy-Item target/release/typst_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
-dotnet pack src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj -c Release -o artifacts/packages
-dotnet build samples/Cetz.Renderer.WinUI.Sample -c Release
-dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
-dotnet pack src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj -c Release -o artifacts/packages
-dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj -c Release -o artifacts/packages
+dotnet build samples/Typst.Renderer.WinUI.Sample -c Release
+dotnet pack src/Typst.Renderer/Typst.Renderer.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj -c Release -o artifacts/packages
+dotnet pack src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
 ./eng/pack-and-verify.ps1 -Rid win-x64
 ```
 

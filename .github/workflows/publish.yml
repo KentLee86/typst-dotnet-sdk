@@ -1,0 +1,133 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: nuget-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+          components: rustfmt, clippy
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-verify-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-verify-1.89-
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: dotnet test tests/Typst.Renderer.Tests/Typst.Renderer.Tests.csproj -c Release
+
+  native:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            library: typst_dotnet_native.dll
+          - os: ubuntu-latest
+            rid: linux-x64
+            library: libtypst_dotnet_native.so
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-1.89-
+      - run: cargo build --release --locked
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "artifacts/native/${{ matrix.rid }}" | Out-Null
+          Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: artifacts/native
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [verify, native]
+    runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: artifacts/native
+          merge-multiple: true
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $packageVersion = [string]$props.Project.PropertyGroup.Version
+          $tagVersion = '${{ github.ref_name }}'.TrimStart('v')
+          if ($packageVersion -ne $tagVersion) {
+            throw "Tag version $tagVersion does not match package version $packageVersion."
+          }
+      - name: Pack and verify Windows runtime
+        shell: pwsh
+        run: ./eng/pack-and-verify.ps1 -Rid win-x64
+      - name: Pack and verify Linux runtime
+        shell: pwsh
+        run: ./eng/pack-and-verify.ps1 -Rid linux-x64
+      - name: Exchange GitHub OIDC token for a NuGet API key
+        uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: devcounsel
+      - name: Publish packages to NuGet.org
+        shell: pwsh
+        run: >-
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          artifacts/packages/*.nupkg
+          --repo "${{ github.repository }}"
+          --verify-tag
+          --generate-notes
+          --title "Typst.Renderer ${{ github.ref_name }}"

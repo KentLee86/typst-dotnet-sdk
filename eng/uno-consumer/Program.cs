@@ -1,6 +1,6 @@
-using Cetz.Renderer.Uno;
+using Typst.Renderer.Uno;
 
-var converted = CetzUnoPixelConverter.ToBgra8Premultiplied(
+var converted = TypstUnoPixelConverter.ToBgra8Premultiplied(
     [10, 20, 30, 40],
     pixelWidth: 1,
     pixelHeight: 1,
@@ -9,4 +9,4 @@ var converted = CetzUnoPixelConverter.ToBgra8Premultiplied(
 if (!converted.SequenceEqual(new byte[] { 30, 20, 10, 40 }))
     throw new InvalidOperationException("The packaged Uno pixel converter returned unexpected data.");
 
-Console.WriteLine($"Loaded {typeof(CetzView).Assembly.GetName().Name}; RGBA to BGRA conversion passed.");
+Console.WriteLine($"Loaded {typeof(TypstView).Assembly.GetName().Name}; RGBA to BGRA conversion passed.");

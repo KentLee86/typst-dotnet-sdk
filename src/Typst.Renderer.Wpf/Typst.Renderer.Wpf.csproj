@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PackageId>Typst.Renderer.Wpf</PackageId>
+    <Description>WPF controls for Typst.Renderer.Core documents</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Typst.Renderer.Core\Typst.Renderer.Core.csproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
