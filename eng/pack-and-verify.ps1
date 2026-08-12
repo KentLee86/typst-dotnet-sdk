@@ -111,11 +111,11 @@ try {
     $nuspecEntry = $zip.Entries | Where-Object { $_.FullName -eq 'Cetz.Renderer.WinUI.nuspec' }
     if ($null -eq $nuspecEntry) { throw 'WinUI package does not contain its nuspec.' }
     $reader = [System.IO.StreamReader]::new($nuspecEntry.Open())
-    try { $nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
-    if ($nuspec -notmatch '<dependency id="Cetz\.Renderer\.Core" version="0\.1\.0"') {
+    try { $winUiNuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    if ($winUiNuspec -notmatch '<dependency id="Cetz\.Renderer\.Core" version="0\.1\.0"') {
         throw 'WinUI package does not depend on Cetz.Renderer.Core 0.1.0.'
     }
-    if ($nuspec -notmatch '<dependency id="Microsoft\.WindowsAppSDK" version="2\.3\.1"') {
+    if ($winUiNuspec -notmatch '<dependency id="Microsoft\.WindowsAppSDK" version="2\.3\.1"') {
         throw 'WinUI package does not depend on Microsoft.WindowsAppSDK 2.3.1.'
     }
 } finally { $zip.Dispose() }
