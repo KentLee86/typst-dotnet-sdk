@@ -20,7 +20,7 @@ framework:
 
 - `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
-- Additional GUI packages can consume the same Core document model.
+- `Cetz.Renderer.Wpf` displays the same documents in a reusable WPF `CetzView`.
 
 ## Avalonia
 
@@ -47,8 +47,43 @@ dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 ```
 
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
-embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
-Uno, or other GUI demos can reuse the same catalog without copying files again.
+embedded examples are UI-independent in-memory projects, so every GUI demo can
+reuse the same catalog without copying files again.
+
+## WPF
+
+`Cetz.Renderer.Wpf` targets `net8.0-windows` and has no third-party runtime
+dependency. Place its view in a WPF `ScrollViewer` for multi-page scrolling:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.Wpf;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Document = document,
+    Zoom = 1.0,
+    PageSpacing = 24
+};
+var preview = new System.Windows.Controls.ScrollViewer { Content = view };
+```
+
+The adapter converts premultiplied RGBA pages to WPF's premultiplied BGRA
+format, preserves each page PPI, and sizes pages in device-independent pixels.
+Dispose the view to release its cached images and document reference
+deterministically.
+
+Run the editable nine-demo WPF sample from the repository root:
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Wpf.Sample
+```
+
+Pass `-- --software-rendering` when a remote desktop or capture environment
+cannot record WPF's hardware-composited client area.
 
 ## Memory rendering
 
@@ -115,8 +150,10 @@ cargo build --release --locked
 New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
 Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
+dotnet pack src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
+./eng/pack-and-verify.ps1 -Rid win-x64
 ```
 
 The repository directly links Typst, CeTZ, and oxifmt in its Rust `cdylib`; it

@@ -14,6 +14,8 @@ dotnet pack (Join-Path $root 'src/Cetz.Renderer.Core/Cetz.Renderer.Core.csproj')
 if ($LASTEXITCODE -ne 0) { throw 'Core renderer pack failed.' }
 dotnet pack (Join-Path $root 'src/Cetz.Renderer.Avalonia/Cetz.Renderer.Avalonia.csproj') -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw 'Avalonia adapter pack failed.' }
+dotnet pack (Join-Path $root 'src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj') -c Release -o $feed
+if ($LASTEXITCODE -ne 0) { throw 'WPF adapter pack failed.' }
 dotnet pack (Join-Path $root "src/Cetz.Renderer.Native.$Rid/Cetz.Renderer.Native.$Rid.csproj") -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw "$Rid runtime pack failed." }
 
@@ -27,6 +29,16 @@ try {
     if (-not ($zip.Entries.FullName -contains $expected)) { throw "Package does not contain $expected" }
 } finally { $zip.Dispose() }
 
+$wpfPackage = Join-Path $feed 'Cetz.Renderer.Wpf.0.1.0.nupkg'
+if (-not (Test-Path $wpfPackage)) { throw "Missing package $wpfPackage" }
+$zip = [System.IO.Compression.ZipFile]::OpenRead($wpfPackage)
+try {
+    $wpfAssembly = $zip.Entries.FullName | Where-Object {
+        $_ -like 'lib/net8.0-windows*/Cetz.Renderer.Wpf.dll'
+    }
+    if (-not $wpfAssembly) { throw 'WPF package does not contain its net8.0-windows assembly.' }
+} finally { $zip.Dispose() }
+
 $currentRid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
 if ($currentRid -eq $Rid) {
     $consumer = Join-Path $root "artifacts/consumer/$Rid"
@@ -37,6 +49,16 @@ if ($currentRid -eq $Rid) {
     if ($LASTEXITCODE -ne 0) { throw "$Rid clean consumer restore failed." }
     dotnet run --project (Join-Path $consumer 'CleanConsumer.csproj') -c Release --no-restore -p:CetzNativePackage=$packageId
     if ($LASTEXITCODE -ne 0) { throw "$Rid clean consumer run failed." }
+
+    if ($Rid -eq 'win-x64') {
+        $wpfConsumer = Join-Path $root "artifacts/consumer-wpf/$Rid"
+        if (Test-Path $wpfConsumer) { Remove-Item -Recurse -Force $wpfConsumer }
+        Copy-Item -Recurse (Join-Path $root 'eng/consumer-wpf') $wpfConsumer
+        dotnet restore (Join-Path $wpfConsumer 'CleanWpfConsumer.csproj') --source $feed --ignore-failed-sources -p:CetzNativePackage=$packageId
+        if ($LASTEXITCODE -ne 0) { throw 'WPF clean consumer restore failed.' }
+        dotnet run --project (Join-Path $wpfConsumer 'CleanWpfConsumer.csproj') -c Release --no-restore -p:CetzNativePackage=$packageId
+        if ($LASTEXITCODE -ne 0) { throw 'WPF clean consumer run failed.' }
+    }
 } else {
     Write-Host "Packed and inspected $Rid on $currentRid; execute the consumer on a $Rid host."
 }
