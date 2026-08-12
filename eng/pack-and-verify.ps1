@@ -10,6 +10,10 @@ $feed = Join-Path $root 'artifacts/packages'
 New-Item -ItemType Directory -Force $feed | Out-Null
 dotnet pack (Join-Path $root 'src/Cetz.Renderer/Cetz.Renderer.csproj') -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw 'Managed SDK pack failed.' }
+dotnet pack (Join-Path $root 'src/Cetz.Renderer.Core/Cetz.Renderer.Core.csproj') -c Release -o $feed
+if ($LASTEXITCODE -ne 0) { throw 'Core renderer pack failed.' }
+dotnet pack (Join-Path $root 'src/Cetz.Renderer.Avalonia/Cetz.Renderer.Avalonia.csproj') -c Release -o $feed
+if ($LASTEXITCODE -ne 0) { throw 'Avalonia adapter pack failed.' }
 dotnet pack (Join-Path $root "src/Cetz.Renderer.Native.$Rid/Cetz.Renderer.Native.$Rid.csproj") -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw "$Rid runtime pack failed." }
 

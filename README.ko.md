@@ -1,5 +1,16 @@
 # Cetz.Renderer
 
+네이티브 SDK 위의 GUI 통합은 플랫폼별 의존성이 섞이지 않도록 계층을
+분리합니다.
+
+- `Cetz.Renderer.Core`: 렌더 결과를 GUI 공통 RGBA 문서/페이지로 변환합니다.
+- `Cetz.Renderer.Avalonia`: 공통 문서를 표시하는 재사용 가능한 `CetzView`를 제공합니다.
+- `samples/Cetz.Renderer.Avalonia.Sample`: 소스를 편집하고 즉시 실제 화면을 확인하는 예제입니다.
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
+```
+
 Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 프로덕션 지향 .NET 8
 SDK입니다. SVG, PNG, PDF, premultiplied RGBA8 결과를 관리 메모리로 반환하며
 `typst.exe`, `cetz-render`, Node, Sharp 프로세스를 실행하지 않습니다.

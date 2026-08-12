@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cetz.Renderer.Avalonia\Cetz.Renderer.Avalonia.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\artifacts\native\win-x64\cetz_dotnet_native.dll"
+          Link="cetz_dotnet_native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\win-x64\cetz_dotnet_native.dll')" />
+    <None Include="..\..\artifacts\native\linux-x64\libcetz_dotnet_native.so"
+          Link="libcetz_dotnet_native.so"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\linux-x64\libcetz_dotnet_native.so')" />
+  </ItemGroup>
+</Project>

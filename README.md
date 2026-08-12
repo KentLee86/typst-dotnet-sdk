@@ -15,6 +15,37 @@ Reference one runtime package. It brings the exact matching managed package:
 Use `Cetz.Renderer.Native.linux-x64` on Linux x64. Native assets follow NuGet's
 `runtimes/{rid}/native/` convention.
 
+GUI integrations are layered so the native SDK stays independent from every UI
+framework:
+
+- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
+- `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
+- Additional GUI packages can consume the same Core document model.
+
+## Avalonia
+
+Render through the common Core layer and assign the result to the Avalonia view:
+
+```csharp
+using Cetz.Renderer.Avalonia;
+using Cetz.Renderer.Core;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Document = document,
+    Zoom = 1.0
+};
+```
+
+Run the interactive editor and preview sample from the repository root:
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
+```
+
 ## Memory rendering
 
 ```csharp

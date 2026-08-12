@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>Cetz.Renderer.Core</PackageId>
+    <Description>UI-neutral document rendering layer for Cetz.Renderer</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cetz.Renderer\Cetz.Renderer.csproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
