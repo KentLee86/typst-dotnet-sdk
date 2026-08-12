@@ -18,13 +18,16 @@ Use `Cetz.Renderer.Native.linux-x64` on Linux x64. Native assets follow NuGet's
 GUI integrations are layered so the native SDK stays independent from every UI
 framework:
 
-- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
+- `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents
+  and owns the shared render, zoom, layout, view-mode, and navigation behavior.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
 - `Cetz.Renderer.Uno` displays those documents with a reusable WinUI/Uno
   `CetzView`.
 - `Cetz.Renderer.WinForms` provides a native Windows Forms `CetzView` with DPI-aware
   zooming and scrolling multi-page layout.
 - `Cetz.Renderer.Wpf` displays the same documents in a reusable WPF `CetzView`.
+- `Cetz.Renderer.WinUI` provides a reusable WinUI 3 `CetzView` on the current
+  stable Windows App SDK. It targets `net8.0-windows10.0.19041.0`.
 - GUI adapters share one view/rendering contract; see
   [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
   navigation, lifecycle, and demo requirements.
@@ -168,6 +171,34 @@ dotnet run --project samples/Cetz.Renderer.WinForms.Sample
 Both GUI samples reuse all nine projects in `Cetz.Renderer.Demo.Shared`, including
 multi-file imports, embedded SVG assets, and multi-page documents.
 
+## WinUI 3
+
+`CetzView` implements `ICetzDocumentView` and delegates fitting, page modes,
+navigation, and exact page bounds to `CetzDocumentViewController`. The WinUI
+adapter owns only native image resources, UI dispatch, and scrolling:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.WinUI;
+
+var view = new CetzView
+{
+    ZoomMode = CetzZoomMode.FitWidth,
+    ViewMode = CetzPageViewMode.ContinuousFacing,
+    PageSpacing = 24
+};
+await view.SetDocumentAsync(document);
+view.MoveNext();
+```
+
+The unpackaged x64 sample uses `CetzRenderController`, the shared nine-demo
+catalog, all fitting and page modes, navigation, and page status:
+
+```powershell
+$env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
+dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
+```
+
 ## Memory rendering
 
 ```csharp
@@ -234,6 +265,7 @@ New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
 Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
 dotnet pack src/Cetz.Renderer.Wpf/Cetz.Renderer.Wpf.csproj -c Release -o artifacts/packages
+dotnet build samples/Cetz.Renderer.WinUI.Sample -c Release
 dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages

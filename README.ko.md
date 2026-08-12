@@ -8,10 +8,12 @@
 - `Cetz.Renderer.Uno`: 공통 문서를 표시하는 Uno Platform용 `CetzView`를 제공합니다.
 - `Cetz.Renderer.WinForms`: DPI, 확대/축소, 다중 페이지 스크롤을 지원하는 Windows Forms용 `CetzView`를 제공합니다.
 - `Cetz.Renderer.Wpf`: 같은 문서를 DPI와 다중 페이지를 보존해 표시하는 WPF `CetzView`를 제공합니다.
+- `Cetz.Renderer.WinUI`: Windows App SDK 기반 WinUI 3용 스크롤 가능한 다중 페이지 `CetzView`를 제공합니다.
 - `samples/Cetz.Renderer.Avalonia.Sample`: 소스를 편집하고 즉시 실제 화면을 확인하는 예제입니다.
 - `samples/Cetz.Renderer.Uno.Sample`: 같은 9개 예제를 사용하는 Uno 편집기/다중 페이지 미리보기입니다.
 - `samples/Cetz.Renderer.WinForms.Sample`: 같은 9개 예제를 사용하는 Windows Forms 편집/미리보기 예제입니다.
 - `samples/Cetz.Renderer.Wpf.Sample`: 9개 공용 데모를 편집하고 스크롤 미리보기로 확인하는 WPF 예제입니다.
+- `samples/Cetz.Renderer.WinUI.Sample`: 같은 9개 데모를 사용하는 unpackaged x64 WinUI 3 예제입니다.
 - `samples/Cetz.Renderer.Demo.Shared`: 모든 GUI 데모가 함께 사용하는 9개 내장 예제 카탈로그입니다.
 
 ```powershell
@@ -56,6 +58,16 @@ dotnet run --project samples/Cetz.Renderer.Wpf.Sample
 
 원격 데스크톱이나 캡처 환경에서 WPF 하드웨어 합성 화면을 기록할 수 없다면
 `-- --software-rendering` 옵션을 추가할 수 있습니다.
+
+WinUI 3 뷰는 Core의 premultiplied RGBA를 WinUI용 premultiplied BGRA로 변환하고,
+페이지 PPI를 96-DIP 좌표로 환산해 시스템 DPI와 무관하게 올바른 물리 크기를
+유지합니다. `Zoom`, `PageSpacing`을 설정할 수 있으며, 백그라운드 렌더 결과는
+`SetDocumentAsync`로 UI 스레드에 안전하게 전달할 수 있습니다.
+
+```powershell
+$env:CETZ_NATIVE_LIBRARY = 'C:\path\to\cetz_dotnet_native.dll'
+dotnet run --project samples/Cetz.Renderer.WinUI.Sample -c Release
+```
 
 Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 프로덕션 지향 .NET 8
 SDK입니다. SVG, PNG, PDF, premultiplied RGBA8 결과를 관리 메모리로 반환하며
