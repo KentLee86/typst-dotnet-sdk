@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Cetz.Renderer.Native.linux-x64</id>
+    <version>0.1.0</version>
+    <authors>KentLee86</authors>
+    <description>Linux x64 native runtime for Cetz.Renderer</description>
+    <license type="expression">MIT</license>
+    <readme>README.md</readme>
+    <repository type="git" url="https://github.com/KentLee86/cetz-dotnet-sdk" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Cetz.Renderer" version="[0.1.0]" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="..\..\artifacts\native\linux-x64\libcetz_dotnet_native.so" target="runtimes\linux-x64\native" />
+    <file src="..\..\README.md" target="" />
+    <file src="_._" target="lib\net8.0" />
+  </files>
+</package>

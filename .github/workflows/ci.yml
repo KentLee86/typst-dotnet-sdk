@@ -1,0 +1,35 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            library: cetz_dotnet_native.dll
+          - os: ubuntu-latest
+            rid: linux-x64
+            library: libcetz_dotnet_native.so
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+          components: rustfmt, clippy
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: cargo fmt -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "artifacts/native/${{ matrix.rid }}" | Out-Null
+          Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
+          $env:CETZ_NATIVE_LIBRARY = (Resolve-Path "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}")
+          dotnet test tests/Cetz.Renderer.Tests/Cetz.Renderer.Tests.csproj -c Release
+      - shell: pwsh
+        run: ./eng/pack-and-verify.ps1 -Rid ${{ matrix.rid }}
