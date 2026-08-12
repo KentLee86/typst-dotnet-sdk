@@ -3,8 +3,10 @@ using Cetz.Renderer.Core;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using VirtualKeyModifiers = Windows.System.VirtualKeyModifiers;
 
 namespace Cetz.Renderer.WinUI;
 
@@ -36,6 +38,7 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         new PropertyMetadata(CetzDocumentViewController.DefaultPageSpacing, OnPageSpacingChanged));
 
     private readonly CetzDocumentViewController _controller = new();
+    private readonly CetzViewportInteractionController _viewportInteraction;
     private readonly ScrollViewer _scrollViewer;
     private readonly Canvas _pageCanvas;
     private readonly WinUiPageResourceSet<WinUiPageResource> _pageResources = new();
@@ -44,6 +47,7 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
 
     public CetzView()
     {
+        _viewportInteraction = new CetzViewportInteractionController(this);
         _pageCanvas = new Canvas
         {
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -58,6 +62,11 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
             VerticalContentAlignment = VerticalAlignment.Top
         };
         _scrollViewer.SizeChanged += ScrollViewerOnSizeChanged;
+        _pageCanvas.AddHandler(PointerPressedEvent, new PointerEventHandler(BeginPan), true);
+        _pageCanvas.AddHandler(PointerMovedEvent, new PointerEventHandler(ContinuePan), true);
+        _pageCanvas.AddHandler(PointerReleasedEvent, new PointerEventHandler(EndPan), true);
+        _pageCanvas.PointerCaptureLost += OnPointerCaptureLost;
+        _scrollViewer.PointerWheelChanged += ZoomWithWheel;
         _controller.Changed += ControllerOnChanged;
         Children.Add(_scrollViewer);
     }
@@ -199,6 +208,11 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         _disposed = true;
         _controller.Changed -= ControllerOnChanged;
         _scrollViewer.SizeChanged -= ScrollViewerOnSizeChanged;
+        _pageCanvas.RemoveHandler(PointerPressedEvent, new PointerEventHandler(BeginPan));
+        _pageCanvas.RemoveHandler(PointerMovedEvent, new PointerEventHandler(ContinuePan));
+        _pageCanvas.RemoveHandler(PointerReleasedEvent, new PointerEventHandler(EndPan));
+        _pageCanvas.PointerCaptureLost -= OnPointerCaptureLost;
+        _scrollViewer.PointerWheelChanged -= ZoomWithWheel;
         ClearPageResources();
         _scrollViewer.Content = null;
         Children.Clear();
@@ -293,6 +307,64 @@ public sealed class CetzView : Grid, ICetzDocumentView, IDisposable
         var width = _scrollViewer.ViewportWidth;
         var height = _scrollViewer.ViewportHeight;
         _controller.SetViewport(width, height);
+    }
+
+    private void BeginPan(object sender, PointerRoutedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(_scrollViewer);
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        _pageCanvas.CancelDirectManipulations();
+        if (!_pageCanvas.CapturePointer(args.Pointer))
+            return;
+
+        _viewportInteraction.BeginPan(
+            point.Position.X,
+            point.Position.Y,
+            _scrollViewer.HorizontalOffset,
+            _scrollViewer.VerticalOffset);
+        args.Handled = true;
+    }
+
+    private void ContinuePan(object sender, PointerRoutedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(_scrollViewer);
+        if (!point.Properties.IsLeftButtonPressed ||
+            !_viewportInteraction.TryPanTo(point.Position.X, point.Position.Y, out var offset))
+            return;
+
+        _scrollViewer.ChangeView(offset.X, offset.Y, null, true);
+        args.Handled = true;
+    }
+
+    private void EndPan(object sender, PointerRoutedEventArgs args)
+    {
+        if (!_viewportInteraction.IsPanning)
+            return;
+
+        _viewportInteraction.EndPan();
+        _pageCanvas.ReleasePointerCapture(args.Pointer);
+        args.Handled = true;
+    }
+
+    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs args) =>
+        _viewportInteraction.EndPan();
+
+    private void ZoomWithWheel(object sender, PointerRoutedEventArgs args)
+    {
+        if ((args.KeyModifiers & VirtualKeyModifiers.Control) == 0)
+            return;
+
+        var point = args.GetCurrentPoint(_scrollViewer);
+        var offset = _viewportInteraction.ZoomByWheel(
+            point.Properties.MouseWheelDelta,
+            point.Position.X,
+            point.Position.Y,
+            _scrollViewer.HorizontalOffset,
+            _scrollViewer.VerticalOffset);
+        DispatcherQueue.TryEnqueue(() => _scrollViewer.ChangeView(offset.X, offset.Y, null, true));
+        args.Handled = true;
     }
 
     private void ScrollCurrentPageIntoView()

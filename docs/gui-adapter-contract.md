@@ -27,6 +27,13 @@ starts rendering immediately. Starting another render cancels the prior request;
 only the newest successful result is shown. A failed render reports the error while
 keeping the previous successful preview.
 
+Viewport hosts use `CetzViewportInteractionController` for left-button drag panning
+and Ctrl+wheel zoom. Platforms supply pointer coordinates and current scroll offsets,
+then apply the returned offset through their native scrolling API. Wheel zoom switches
+to `Custom` mode and preserves the document position beneath the pointer.
+Avalonia applications can use `CetzViewport`, which supplies the native scroll host,
+four-direction workspace, routed input interception, and layout-synchronized anchoring.
+
 ## Adapter acceptance checklist
 
 1. The control is assignable to `ICetzDocumentView`.

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Cetz.Renderer.Core;
@@ -14,6 +15,7 @@ public sealed class MainWindow : Window
     private static readonly Brush MutedBrush = BrushFrom("#64748B");
     private static readonly Brush SuccessBrush = BrushFrom("#087F5B");
     private readonly CetzRenderController _renderController;
+    private readonly CetzViewportInteractionController _viewportInteraction;
     private readonly global::Cetz.Renderer.Wpf.CetzView _view = new()
     {
         Margin = new Thickness(28),
@@ -95,6 +97,7 @@ public sealed class MainWindow : Window
                 PackageResolution = CetzPackageResolution.EmbeddedOnly
             },
             new DispatcherSynchronizationContext(Dispatcher));
+        _viewportInteraction = new CetzViewportInteractionController(_view);
 
         SelectDemo();
         _demoPicker.SelectionChanged += DemoSelectionChanged;
@@ -107,6 +110,11 @@ public sealed class MainWindow : Window
         _preview.Loaded += PreviewViewportChanged;
         _preview.SizeChanged += PreviewViewportChanged;
         _preview.ScrollChanged += PreviewScrollChanged;
+        _preview.PreviewMouseLeftButtonDown += BeginPan;
+        _preview.PreviewMouseMove += ContinuePan;
+        _preview.PreviewMouseLeftButtonUp += EndPan;
+        _preview.LostMouseCapture += (_, _) => _viewportInteraction.EndPan();
+        _preview.PreviewMouseWheel += ZoomWithWheel;
         Content = BuildLayout();
         ContentRendered += WindowContentRendered;
         Closing += WindowClosing;
@@ -246,6 +254,48 @@ public sealed class MainWindow : Window
         var width = _preview.ViewportWidth > 0 ? _preview.ViewportWidth : _preview.ActualWidth;
         var height = _preview.ViewportHeight > 0 ? _preview.ViewportHeight : _preview.ActualHeight;
         _view.SetViewport(width, height);
+    }
+
+    private void BeginPan(object sender, MouseButtonEventArgs args)
+    {
+        var point = args.GetPosition(_preview);
+        _viewportInteraction.BeginPan(point.X, point.Y, _preview.HorizontalOffset, _preview.VerticalOffset);
+        _preview.CaptureMouse();
+        _preview.Cursor = Cursors.Hand;
+        args.Handled = true;
+    }
+
+    private void ContinuePan(object sender, MouseEventArgs args)
+    {
+        var point = args.GetPosition(_preview);
+        if (!_viewportInteraction.TryPanTo(point.X, point.Y, out var offset)) return;
+        _preview.ScrollToHorizontalOffset(offset.X);
+        _preview.ScrollToVerticalOffset(offset.Y);
+        args.Handled = true;
+    }
+
+    private void EndPan(object sender, MouseButtonEventArgs args)
+    {
+        _viewportInteraction.EndPan();
+        _preview.ReleaseMouseCapture();
+        _preview.Cursor = null;
+        args.Handled = true;
+    }
+
+    private void ZoomWithWheel(object sender, MouseWheelEventArgs args)
+    {
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+        var point = args.GetPosition(_preview);
+        var offset = _viewportInteraction.ZoomByWheel(
+            args.Delta, point.X, point.Y, _preview.HorizontalOffset, _preview.VerticalOffset);
+        _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _preview.ScrollToHorizontalOffset(offset.X);
+            _preview.ScrollToVerticalOffset(offset.Y);
+        }, DispatcherPriority.Loaded);
+        UpdatePageIndicator();
+        args.Handled = true;
     }
 
     private async Task RenderAsync()

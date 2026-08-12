@@ -6,6 +6,7 @@ namespace Cetz.Renderer.WinForms.Sample;
 public sealed class MainForm : Form
 {
     private readonly CetzRendererOptions _rendererOptions;
+    private readonly CetzViewportInteractionController _viewportInteraction;
     private CetzRenderController? _renderController;
     private readonly global::Cetz.Renderer.WinForms.CetzView _preview = new()
     {
@@ -77,6 +78,15 @@ public sealed class MainForm : Form
             NativeLibraryPath = ResolveNativeLibrary(),
             PackageResolution = CetzPackageResolution.EmbeddedOnly
         };
+        _viewportInteraction = new CetzViewportInteractionController(_preview);
+        _preview.MouseDown += BeginPan;
+        _preview.MouseMove += ContinuePan;
+        _preview.MouseUp += EndPan;
+        _preview.MouseCaptureChanged += (_, _) =>
+        {
+            if (!_preview.Capture) _viewportInteraction.EndPan();
+        };
+        _preview.MouseWheel += ZoomWithWheel;
 
         _demoPicker.SelectedIndexChanged += DemoPicker_SelectedIndexChanged;
         _renderButton.Click += async (_, _) => await RenderAsync();
@@ -292,6 +302,50 @@ public sealed class MainForm : Form
         _previousButton.Enabled = count > 0 && _preview.CurrentPageIndex > 0;
         _nextButton.Enabled = count > 0 && _preview.CurrentPageIndex + (facing ? 2 : 1) < count;
     }
+
+    private void BeginPan(object? sender, MouseEventArgs args)
+    {
+        if (args.Button != MouseButtons.Left) return;
+        var offset = CurrentScrollOffset();
+        _viewportInteraction.BeginPan(args.X, args.Y, offset.X, offset.Y);
+        _preview.Focus();
+        _preview.Capture = true;
+        _preview.Cursor = Cursors.Hand;
+    }
+
+    private void ContinuePan(object? sender, MouseEventArgs args)
+    {
+        if (!_viewportInteraction.TryPanTo(args.X, args.Y, out var offset)) return;
+        ApplyScrollOffset(offset);
+    }
+
+    private void EndPan(object? sender, MouseEventArgs args)
+    {
+        if (args.Button != MouseButtons.Left) return;
+        _viewportInteraction.EndPan();
+        _preview.Capture = false;
+        _preview.Cursor = Cursors.Default;
+    }
+
+    private void ZoomWithWheel(object? sender, MouseEventArgs args)
+    {
+        if (!ModifierKeys.HasFlag(Keys.Control)) return;
+        var current = CurrentScrollOffset();
+        var offset = _viewportInteraction.ZoomByWheel(
+            args.Delta, args.X, args.Y, current.X, current.Y);
+        _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
+        _zoom.Value = Math.Clamp((decimal)_preview.Zoom, _zoom.Minimum, _zoom.Maximum);
+        BeginInvoke(() => ApplyScrollOffset(offset));
+        UpdateNavigation();
+    }
+
+    private CetzViewportOffset CurrentScrollOffset()
+        => new(-_preview.AutoScrollPosition.X, -_preview.AutoScrollPosition.Y);
+
+    private void ApplyScrollOffset(CetzViewportOffset offset)
+        => _preview.AutoScrollPosition = new Point(
+            checked((int)Math.Min(int.MaxValue, Math.Round(offset.X))),
+            checked((int)Math.Min(int.MaxValue, Math.Round(offset.Y))));
 
     private static ComboBox CreateEnumPicker() => new()
     {

@@ -20,6 +20,7 @@
     <Project Path="src/Cetz.Renderer/Cetz.Renderer.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Cetz.Renderer.Avalonia.Tests/Cetz.Renderer.Avalonia.Tests.csproj" />
     <Project Path="tests/Cetz.Renderer.Tests/Cetz.Renderer.Tests.csproj" />
     <Project Path="tests/Cetz.Renderer.WinForms.Tests/Cetz.Renderer.WinForms.Tests.csproj" />
     <Project Path="tests/Cetz.Renderer.Wpf.Tests/Cetz.Renderer.Wpf.Tests.csproj" />

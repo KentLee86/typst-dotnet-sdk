@@ -10,11 +10,11 @@ namespace Cetz.Renderer.Avalonia.Sample;
 public sealed class MainWindow : Window
 {
     private readonly CetzRenderController _renderController;
-    private readonly global::Cetz.Renderer.Avalonia.CetzView _view = new()
+    private readonly global::Cetz.Renderer.Avalonia.CetzViewport _preview = new()
     {
-        Margin = new Thickness(28),
-        Zoom = 0.9
+        Background = new SolidColorBrush(Color.Parse("#DDE4EE"))
     };
+    private global::Cetz.Renderer.Avalonia.CetzView _view => _preview.View;
     private readonly TextBox _source = new()
     {
         AcceptsReturn = true,
@@ -83,6 +83,7 @@ public sealed class MainWindow : Window
             if (_viewModePicker.SelectedItem is CetzPageViewMode mode) _view.SetViewMode(mode);
             UpdatePageStatus();
         };
+        _preview.ZoomChanged += (_, _) => _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
         _previousPage.Click += (_, _) => { _view.MovePrevious(); UpdatePageStatus(); };
         _nextPage.Click += (_, _) => { _view.MoveNext(); UpdatePageStatus(); };
         _view.SetZoomMode((CetzZoomMode)_zoomModePicker.SelectedItem!);
@@ -136,17 +137,6 @@ public sealed class MainWindow : Window
         Grid.SetRow(_status, 3);
         editor.Children.Add(_status);
 
-        var preview = new ScrollViewer
-        {
-            Content = _view,
-            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Background = new SolidColorBrush(Color.Parse("#DDE4EE"))
-        };
-        preview.SizeChanged += (_, args) => _view.SetViewport(
-            Math.Max(0, args.NewSize.Width - _view.Margin.Left - _view.Margin.Right),
-            Math.Max(0, args.NewSize.Height - _view.Margin.Top - _view.Margin.Bottom));
-
         var previewToolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -163,8 +153,8 @@ public sealed class MainWindow : Window
 
         var previewPane = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         previewPane.Children.Add(previewToolbar);
-        Grid.SetRow(preview, 1);
-        previewPane.Children.Add(preview);
+        Grid.SetRow(_preview, 1);
+        previewPane.Children.Add(_preview);
 
         var split = new Grid { ColumnDefinitions = new ColumnDefinitions("430,*") };
         split.Children.Add(new Border

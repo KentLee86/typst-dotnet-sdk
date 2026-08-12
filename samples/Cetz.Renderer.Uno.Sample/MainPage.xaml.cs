@@ -4,19 +4,28 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.System;
 
 namespace Cetz.Renderer.Uno.Sample;
 
 public sealed partial class MainPage : Page
 {
     private CetzRenderController? _renderController;
+    private readonly CetzViewportInteractionController _viewportInteraction;
     private bool _loaded;
     private bool _disposed;
 
     public MainPage()
     {
         InitializeComponent();
+        _viewportInteraction = new CetzViewportInteractionController(Preview);
+        PreviewScroller.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(BeginPan), true);
+        PreviewScroller.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(ContinuePan), true);
+        PreviewScroller.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(EndPan), true);
+        PreviewScroller.PointerCaptureLost += OnPointerCaptureLost;
+        PreviewScroller.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(ZoomWithWheel), true);
         DemoPicker.ItemsSource = CetzDemoCatalog.All;
         DemoPicker.SelectedIndex = 0;
         LoadSelectedDemo();
@@ -34,6 +43,11 @@ public sealed partial class MainPage : Page
         Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
         DemoPicker.SelectionChanged -= OnDemoSelectionChanged;
+        PreviewScroller.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(BeginPan));
+        PreviewScroller.RemoveHandler(UIElement.PointerMovedEvent, new PointerEventHandler(ContinuePan));
+        PreviewScroller.RemoveHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(EndPan));
+        PreviewScroller.PointerCaptureLost -= OnPointerCaptureLost;
+        PreviewScroller.RemoveHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(ZoomWithWheel));
         if (_renderController is not null)
         {
             _renderController.StateChanged -= OnRenderStateChanged;
@@ -136,6 +150,65 @@ public sealed partial class MainPage : Page
 
         Preview.SetViewport(Math.Max(0, args.NewSize.Width - 56), Math.Max(0, args.NewSize.Height - 56));
         UpdateViewStatus();
+    }
+
+    private void BeginPan(object sender, PointerRoutedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(PreviewScroller);
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+        if (!PreviewScroller.CapturePointer(args.Pointer))
+            return;
+
+        _viewportInteraction.BeginPan(
+            point.Position.X,
+            point.Position.Y,
+            PreviewScroller.HorizontalOffset,
+            PreviewScroller.VerticalOffset);
+        args.Handled = true;
+    }
+
+    private void ContinuePan(object sender, PointerRoutedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(PreviewScroller);
+        if (!point.Properties.IsLeftButtonPressed ||
+            !_viewportInteraction.TryPanTo(point.Position.X, point.Position.Y, out var offset))
+            return;
+
+        PreviewScroller.ChangeView(offset.X, offset.Y, null, true);
+        args.Handled = true;
+    }
+
+    private void EndPan(object sender, PointerRoutedEventArgs args)
+    {
+        if (!_viewportInteraction.IsPanning)
+            return;
+
+        _viewportInteraction.EndPan();
+        PreviewScroller.ReleasePointerCapture(args.Pointer);
+        args.Handled = true;
+    }
+
+    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs args) =>
+        _viewportInteraction.EndPan();
+
+    private void ZoomWithWheel(object sender, PointerRoutedEventArgs args)
+    {
+        if ((args.KeyModifiers & VirtualKeyModifiers.Control) == 0)
+            return;
+
+        var point = args.GetCurrentPoint(PreviewScroller);
+        var offset = _viewportInteraction.ZoomByWheel(
+            point.Properties.MouseWheelDelta,
+            point.Position.X,
+            point.Position.Y,
+            PreviewScroller.HorizontalOffset,
+            PreviewScroller.VerticalOffset);
+        ZoomModePicker.SelectedIndex = 0;
+        ZoomSlider.Value = Preview.Zoom;
+        PreviewScroller.ChangeView(offset.X, offset.Y, null, true);
+        UpdateViewStatus();
+        args.Handled = true;
     }
 
     private void UpdateViewStatus()
