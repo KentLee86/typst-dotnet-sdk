@@ -112,19 +112,25 @@ jobs:
           user: devcounsel
       - name: Publish packages to NuGet.org
         shell: pwsh
-        run: >-
-          dotnet nuget push "artifacts/packages/*.nupkg"
-          --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}"
-          --source https://api.nuget.org/v3/index.json
-          --skip-duplicate
+        run: |
+          $packages = Get-ChildItem 'artifacts/packages' -Filter '*.nupkg' | Sort-Object Name
+          if ($packages.Count -ne 9) { throw "Expected 9 packages, found $($packages.Count)." }
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --api-key '${{ steps.nuget.outputs.NUGET_API_KEY }}' `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Failed to publish $($package.Name)." }
+          }
       - name: Create GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${{ github.ref_name }}"
-          artifacts/packages/*.nupkg
-          --repo "${{ github.repository }}"
-          --verify-tag
-          --generate-notes
-          --title "Typst.Renderer ${{ github.ref_name }}"
+        run: |
+          $packages = @(Get-ChildItem 'artifacts/packages' -Filter '*.nupkg' | ForEach-Object FullName)
+          gh release create '${{ github.ref_name }}' @packages `
+            --repo '${{ github.repository }}' `
+            --verify-tag `
+            --generate-notes `
+            --title 'Typst.Renderer ${{ github.ref_name }}'
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }
