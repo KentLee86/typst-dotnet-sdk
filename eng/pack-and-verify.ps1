@@ -16,12 +16,14 @@ dotnet pack (Join-Path $root 'src/Typst.Renderer.Avalonia/Typst.Renderer.Avaloni
 if ($LASTEXITCODE -ne 0) { throw 'Avalonia adapter pack failed.' }
 dotnet pack (Join-Path $root 'src/Typst.Renderer.Uno/Typst.Renderer.Uno.csproj') -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw 'Uno adapter pack failed.' }
-dotnet pack (Join-Path $root 'src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj') -c Release -o $feed
-if ($LASTEXITCODE -ne 0) { throw 'WinForms adapter pack failed.' }
-dotnet pack (Join-Path $root 'src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj') -c Release -o $feed
-if ($LASTEXITCODE -ne 0) { throw 'WPF adapter pack failed.' }
-dotnet pack (Join-Path $root 'src/Typst.Renderer.WinUI/Typst.Renderer.WinUI.csproj') -c Release -o $feed
-if ($LASTEXITCODE -ne 0) { throw 'WinUI adapter pack failed.' }
+if ($Rid -eq 'win-x64') {
+    dotnet pack (Join-Path $root 'src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj') -c Release -o $feed
+    if ($LASTEXITCODE -ne 0) { throw 'WinForms adapter pack failed.' }
+    dotnet pack (Join-Path $root 'src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj') -c Release -o $feed
+    if ($LASTEXITCODE -ne 0) { throw 'WPF adapter pack failed.' }
+    dotnet pack (Join-Path $root 'src/Typst.Renderer.WinUI/Typst.Renderer.WinUI.csproj') -c Release -o $feed
+    if ($LASTEXITCODE -ne 0) { throw 'WinUI adapter pack failed.' }
+}
 dotnet pack (Join-Path $root "src/Typst.Renderer.Native.$Rid/Typst.Renderer.Native.$Rid.csproj") -c Release -o $feed
 if ($LASTEXITCODE -ne 0) { throw "$Rid runtime pack failed." }
 
@@ -64,10 +66,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Uno clean consumer restore failed.' }
 dotnet run --project (Join-Path $unoConsumer 'UnoConsumer.csproj') -c Release --no-restore
 if ($LASTEXITCODE -ne 0) { throw 'Uno clean consumer run failed.' }
 
-$winFormsPackage = Join-Path $feed 'Typst.Renderer.WinForms.0.1.0.nupkg'
-if (-not (Test-Path $winFormsPackage)) { throw "Missing package $winFormsPackage" }
-$winFormsZip = [System.IO.Compression.ZipFile]::OpenRead($winFormsPackage)
-try {
+if ($Rid -eq 'win-x64') {
+    $winFormsPackage = Join-Path $feed 'Typst.Renderer.WinForms.0.1.0.nupkg'
+    if (-not (Test-Path $winFormsPackage)) { throw "Missing package $winFormsPackage" }
+    $winFormsZip = [System.IO.Compression.ZipFile]::OpenRead($winFormsPackage)
+    try {
     $assembly = $winFormsZip.Entries.FullName | Where-Object {
         $_ -match '^lib/net8\.0-windows[^/]*/Typst\.Renderer\.WinForms\.dll$'
     }
@@ -88,22 +91,22 @@ try {
     if ($null -eq $frameworkReference) {
         throw 'WinForms package is missing its Windows Forms framework reference.'
     }
-} finally { $winFormsZip.Dispose() }
+    } finally { $winFormsZip.Dispose() }
 
-$wpfPackage = Join-Path $feed 'Typst.Renderer.Wpf.0.1.0.nupkg'
-if (-not (Test-Path $wpfPackage)) { throw "Missing package $wpfPackage" }
-$zip = [System.IO.Compression.ZipFile]::OpenRead($wpfPackage)
-try {
+    $wpfPackage = Join-Path $feed 'Typst.Renderer.Wpf.0.1.0.nupkg'
+    if (-not (Test-Path $wpfPackage)) { throw "Missing package $wpfPackage" }
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($wpfPackage)
+    try {
     $wpfAssembly = $zip.Entries.FullName | Where-Object {
         $_ -like 'lib/net8.0-windows*/Typst.Renderer.Wpf.dll'
     }
     if (-not $wpfAssembly) { throw 'WPF package does not contain its net8.0-windows assembly.' }
-} finally { $zip.Dispose() }
+    } finally { $zip.Dispose() }
 
-$winUiPackage = Join-Path $feed 'Typst.Renderer.WinUI.0.1.0.nupkg'
-if (-not (Test-Path $winUiPackage)) { throw "Missing package $winUiPackage" }
-$zip = [System.IO.Compression.ZipFile]::OpenRead($winUiPackage)
-try {
+    $winUiPackage = Join-Path $feed 'Typst.Renderer.WinUI.0.1.0.nupkg'
+    if (-not (Test-Path $winUiPackage)) { throw "Missing package $winUiPackage" }
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($winUiPackage)
+    try {
     $assembly = 'lib/net8.0-windows10.0.19041/Typst.Renderer.WinUI.dll'
     if (-not ($zip.Entries.FullName -contains $assembly)) { throw "WinUI package does not contain $assembly" }
     $resources = 'lib/net8.0-windows10.0.19041/Typst.Renderer.WinUI.pri'
@@ -118,16 +121,17 @@ try {
     if ($winUiNuspec -notmatch '<dependency id="Microsoft\.WindowsAppSDK" version="2\.3\.1"') {
         throw 'WinUI package does not depend on Microsoft.WindowsAppSDK 2.3.1.'
     }
-} finally { $zip.Dispose() }
+    } finally { $zip.Dispose() }
 
-$winUiConsumer = Join-Path $root 'artifacts/consumer/winui'
-if (Test-Path $winUiConsumer) { Remove-Item -Recurse -Force $winUiConsumer }
-Copy-Item -Recurse (Join-Path $root 'eng/winui-consumer') $winUiConsumer
-$winUiPackages = Join-Path $winUiConsumer '.nuget/packages'
-dotnet restore (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') --force --no-cache --packages $winUiPackages
-if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer restore failed.' }
-dotnet build (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') -c Release --no-restore
-if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer build failed.' }
+    $winUiConsumer = Join-Path $root 'artifacts/consumer/winui'
+    if (Test-Path $winUiConsumer) { Remove-Item -Recurse -Force $winUiConsumer }
+    Copy-Item -Recurse (Join-Path $root 'eng/winui-consumer') $winUiConsumer
+    $winUiPackages = Join-Path $winUiConsumer '.nuget/packages'
+    dotnet restore (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') --force --no-cache --packages $winUiPackages
+    if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer restore failed.' }
+    dotnet build (Join-Path $winUiConsumer 'CleanWinUiConsumer.csproj') -c Release --no-restore
+    if ($LASTEXITCODE -ne 0) { throw 'WinUI clean consumer build failed.' }
+}
 
 $currentRid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
 if ($currentRid -eq $Rid) {
@@ -141,15 +145,15 @@ if ($currentRid -eq $Rid) {
     dotnet run --project (Join-Path $consumer 'CleanConsumer.csproj') -c Release --no-restore -p:TypstNativePackage=$packageId
     if ($LASTEXITCODE -ne 0) { throw "$Rid clean consumer run failed." }
 
-    $winFormsConsumer = Join-Path $root "artifacts/winforms-consumer/$Rid"
-    if (Test-Path $winFormsConsumer) { Remove-Item -Recurse -Force $winFormsConsumer }
-    Copy-Item -Recurse (Join-Path $root 'eng/winforms-consumer') $winFormsConsumer
-    dotnet restore (Join-Path $winFormsConsumer 'WinFormsConsumer.csproj') --source $feed --ignore-failed-sources -p:TypstNativePackage=$packageId
-    if ($LASTEXITCODE -ne 0) { throw "$Rid WinForms consumer restore failed." }
-    dotnet run --project (Join-Path $winFormsConsumer 'WinFormsConsumer.csproj') -c Release --no-restore -p:TypstNativePackage=$packageId
-    if ($LASTEXITCODE -ne 0) { throw "$Rid WinForms consumer run failed." }
-
     if ($Rid -eq 'win-x64') {
+        $winFormsConsumer = Join-Path $root "artifacts/winforms-consumer/$Rid"
+        if (Test-Path $winFormsConsumer) { Remove-Item -Recurse -Force $winFormsConsumer }
+        Copy-Item -Recurse (Join-Path $root 'eng/winforms-consumer') $winFormsConsumer
+        dotnet restore (Join-Path $winFormsConsumer 'WinFormsConsumer.csproj') --source $feed --ignore-failed-sources -p:TypstNativePackage=$packageId
+        if ($LASTEXITCODE -ne 0) { throw "$Rid WinForms consumer restore failed." }
+        dotnet run --project (Join-Path $winFormsConsumer 'WinFormsConsumer.csproj') -c Release --no-restore -p:TypstNativePackage=$packageId
+        if ($LASTEXITCODE -ne 0) { throw "$Rid WinForms consumer run failed." }
+
         $wpfConsumer = Join-Path $root "artifacts/consumer-wpf/$Rid"
         if (Test-Path $wpfConsumer) { Remove-Item -Recurse -Force $wpfConsumer }
         Copy-Item -Recurse (Join-Path $root 'eng/consumer-wpf') $wpfConsumer
