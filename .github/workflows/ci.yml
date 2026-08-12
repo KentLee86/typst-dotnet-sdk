@@ -13,11 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check pinned native source fingerprint
+        id: native-source
+        shell: pwsh
+        run: |
+          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          $fingerprint = ./eng/native-fingerprint.ps1
+          "changed=$($fingerprint -ne $manifest.sourceFingerprint)".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+      - if: steps.native-source.outputs.changed == 'true'
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.89
           components: rustfmt, clippy
-      - uses: actions/cache@v4
+      - if: steps.native-source.outputs.changed == 'true'
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -26,9 +35,12 @@ jobs:
           key: ${{ runner.os }}-cargo-verify-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-verify-1.89-
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+      - if: steps.native-source.outputs.changed == 'true'
+        run: cargo fmt --all -- --check
+      - if: steps.native-source.outputs.changed == 'true'
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - if: steps.native-source.outputs.changed == 'true'
+        run: cargo test --workspace --locked
 
   native:
     strategy:
@@ -44,13 +56,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Restore pinned native binary
+        id: native-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          New-Item -ItemType Directory -Force 'artifacts/native/${{ matrix.rid }}' | Out-Null
+          gh release download $manifest.tag `
+            --repo '${{ github.repository }}' `
+            --pattern '${{ matrix.library }}' `
+            --dir 'artifacts/native/${{ matrix.rid }}'
+          $restored = $LASTEXITCODE -eq 0
+          if ($restored) {
+            gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir 'artifacts/native/${{ matrix.rid }}'
+            $restored = $LASTEXITCODE -eq 0
+          }
+          if ($restored) {
+            $expected = (Get-Content 'artifacts/native/${{ matrix.rid }}/native-checksums.sha256' | Where-Object { $_ -match '  ${{ matrix.library }}$' }) -replace '  .+$', ''
+            $actual = (Get-FileHash 'artifacts/native/${{ matrix.rid }}/${{ matrix.library }}' -Algorithm SHA256).Hash.ToLowerInvariant()
+            $restored = $expected -eq $actual
+          }
+          "restored=$restored".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+      - if: steps.native-release.outputs.restored != 'true'
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.89
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - uses: actions/cache@v4
+      - if: steps.native-release.outputs.restored != 'true'
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -59,11 +96,13 @@ jobs:
           key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-1.89-
-      - run: cargo build --release --locked
+      - if: steps.native-release.outputs.restored != 'true'
+        run: cargo build --release --locked
       - shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "artifacts/native/${{ matrix.rid }}" | Out-Null
-          Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
+          if ('${{ steps.native-release.outputs.restored }}' -ne 'true') {
+            Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
+          }
           $env:TYPST_NATIVE_LIBRARY = (Resolve-Path "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}")
           dotnet test tests/Typst.Renderer.Tests/Typst.Renderer.Tests.csproj -c Release
       - shell: pwsh

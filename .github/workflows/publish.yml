@@ -16,65 +16,21 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.89
-          components: rustfmt, clippy
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-verify-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-verify-1.89-
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
-
-  native:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            library: typst_dotnet_native.dll
-          - os: ubuntu-latest
-            rid: linux-x64
-            library: libtypst_dotnet_native.so
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.89
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**/*.rs', 'native/typst-dotnet-native/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-release-1.89-
-      - run: cargo build --release --locked
-      - shell: pwsh
+      - name: Validate pinned native release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          New-Item -ItemType Directory -Force "artifacts/native/${{ matrix.rid }}" | Out-Null
-          Copy-Item "target/release/${{ matrix.library }}" "artifacts/native/${{ matrix.rid }}/${{ matrix.library }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: native-${{ matrix.rid }}
-          path: artifacts/native
-          if-no-files-found: error
-          retention-days: 7
+          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          $fingerprint = ./eng/native-fingerprint.ps1
+          if ($fingerprint -ne $manifest.sourceFingerprint) {
+            throw 'Native source changed without bumping the pinned native release.'
+          }
+          gh release view $manifest.tag --repo '${{ github.repository }}' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Pinned native release $($manifest.tag) does not exist." }
 
   publish:
-    needs: [verify, native]
+    needs: verify
     runs-on: windows-latest
     environment: release
     permissions:
@@ -85,11 +41,29 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: native-*
-          path: artifacts/native
-          merge-multiple: true
+      - name: Download pinned native binaries
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
+          New-Item -ItemType Directory -Force artifacts/native/linux-x64 | Out-Null
+          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'typst_dotnet_native.dll' --dir artifacts/native/win-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download the pinned Windows native binary.' }
+          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'libtypst_dotnet_native.so' --dir artifacts/native/linux-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download the pinned Linux native binary.' }
+          gh release download $manifest.tag --repo '${{ github.repository }}' --pattern 'native-checksums.sha256' --dir artifacts/native
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download native checksums.' }
+          foreach ($binary in @(
+            'artifacts/native/win-x64/typst_dotnet_native.dll',
+            'artifacts/native/linux-x64/libtypst_dotnet_native.so'
+          )) {
+            $name = Split-Path $binary -Leaf
+            $expected = (Get-Content artifacts/native/native-checksums.sha256 | Where-Object { $_ -match "  $([regex]::Escape($name))$" }) -replace '  .+$', ''
+            $actual = (Get-FileHash $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -ne $actual) { throw "Checksum mismatch for $name." }
+          }
       - name: Validate release version
         shell: pwsh
         run: |

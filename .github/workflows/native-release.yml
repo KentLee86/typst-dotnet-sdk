@@ -1,0 +1,103 @@
+name: native release
+
+on:
+  push:
+    tags:
+      - "native-v*"
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate native release metadata
+        shell: pwsh
+        run: |
+          $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
+          if ($manifest.tag -ne '${{ github.ref_name }}') {
+            throw "Tag ${{ github.ref_name }} does not match pinned tag $($manifest.tag)."
+          }
+          $fingerprint = ./eng/native-fingerprint.ps1
+          if ($fingerprint -ne $manifest.sourceFingerprint) {
+            throw "Native source fingerprint changed. Expected $($manifest.sourceFingerprint), got $fingerprint."
+          }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            library: typst_dotnet_native.dll
+          - os: ubuntu-latest
+            library: libtypst_dotnet_native.so
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-1.89-${{ hashFiles('Cargo.lock', 'native/typst-dotnet-native/**', 'native/typst-dotnet-native/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-1.89-
+      - run: cargo build --release --locked
+      - shell: pwsh
+        run: Copy-Item "target/release/${{ matrix.library }}" "${{ matrix.library }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.library }}
+          path: ${{ matrix.library }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*typst_dotnet_native*"
+          path: artifacts/native-release
+          merge-multiple: true
+      - name: Publish immutable native binaries
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item eng/native-release.json artifacts/native-release/native-release.json
+          $binaries = @(Get-ChildItem artifacts/native-release -File | Where-Object Name -Match '^(lib)?typst_dotnet_native\.(dll|so)$')
+          $checksums = foreach ($binary in $binaries) {
+            "$((Get-FileHash $binary.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($binary.Name)"
+          }
+          $checksums | Set-Content artifacts/native-release/native-checksums.sha256 -Encoding ascii
+          $assets = @(Get-ChildItem artifacts/native-release -File | ForEach-Object FullName)
+          gh release create '${{ github.ref_name }}' @assets `
+            --repo '${{ github.repository }}' `
+            --verify-tag `
+            --title 'Typst.Renderer native ${{ github.ref_name }}' `
+            --notes 'Pinned native runtime binaries. Immutable; bump eng/native-release.json for any native source or toolchain change.'
+          if ($LASTEXITCODE -ne 0) { throw 'Native GitHub release creation failed.' }
