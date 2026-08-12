@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <CetzNativePackage Condition="'$(CetzNativePackage)' == ''">Cetz.Renderer.Native.win-x64</CetzNativePackage>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cetz.Renderer.WinForms" Version="0.1.0" />
+    <PackageReference Include="$(CetzNativePackage)" Version="0.1.0" />
+  </ItemGroup>
+</Project>

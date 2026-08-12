@@ -4,6 +4,7 @@
     <Project Path="samples/Cetz.Renderer.Demo.Shared/Cetz.Renderer.Demo.Shared.csproj" />
     <Project Path="samples/Cetz.Renderer.Sample/Cetz.Renderer.Sample.csproj" />
     <Project Path="samples/Cetz.Renderer.Uno.Sample/Cetz.Renderer.Uno.Sample.csproj" />
+    <Project Path="samples/Cetz.Renderer.WinForms.Sample/Cetz.Renderer.WinForms.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Cetz.Renderer.Avalonia/Cetz.Renderer.Avalonia.csproj" />
@@ -11,9 +12,11 @@
     <Project Path="src/Cetz.Renderer.Uno/Cetz.Renderer.Uno.csproj" />
     <Project Path="src/Cetz.Renderer.Native.linux-x64/Cetz.Renderer.Native.linux-x64.csproj" />
     <Project Path="src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj" />
+    <Project Path="src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj" />
     <Project Path="src/Cetz.Renderer/Cetz.Renderer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cetz.Renderer.Tests/Cetz.Renderer.Tests.csproj" />
+    <Project Path="tests/Cetz.Renderer.WinForms.Tests/Cetz.Renderer.WinForms.Tests.csproj" />
   </Folder>
 </Solution>

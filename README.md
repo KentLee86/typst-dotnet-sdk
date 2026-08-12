@@ -22,6 +22,8 @@ framework:
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
 - `Cetz.Renderer.Uno` displays those documents with a reusable WinUI/Uno
   `CetzView`.
+- `Cetz.Renderer.WinForms` provides a native Windows Forms `CetzView` with DPI-aware
+  zooming and scrolling multi-page layout.
 - GUI adapters share one view/rendering contract; see
   [GUI adapter contract](docs/gui-adapter-contract.md) for fitting, page modes,
   navigation, lifecycle, and demo requirements.
@@ -96,6 +98,40 @@ The verified targets are `net8.0-desktop` (Skia Desktop) and
 `net8.0-windows10.0.26100` (Windows App SDK). The adapter package also contains
 the framework-neutral `net8.0` Uno asset for other Uno heads.
 
+## Windows Forms
+
+The Windows Forms adapter targets `net8.0-windows` and has no third-party runtime
+dependency. It copies Core's premultiplied RGBA pages into control-owned GDI+
+premultiplied BGRA bitmaps, preserves alpha, and combines render PPI with the
+monitor DPI and `Zoom` when laying out pages:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.WinForms;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Dock = DockStyle.Fill,
+    Document = document,
+    Zoom = 1.0,
+    PageSpacing = 24
+};
+```
+
+`CetzView` owns its converted bitmaps and disposes them when the document changes
+or the control is disposed. Its built-in scrolling surface paints only visible
+pages. Run the Windows Forms editor and multi-page preview from the repository root:
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.WinForms.Sample
+```
+
+Both GUI samples reuse all nine projects in `Cetz.Renderer.Demo.Shared`, including
+multi-file imports, embedded SVG assets, and multi-page documents.
+
 ## Memory rendering
 
 ```csharp
@@ -162,6 +198,7 @@ New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
 Copy-Item target/release/cetz_dotnet_native.dll artifacts/native/win-x64/
 dotnet test -c Release
 dotnet pack src/Cetz.Renderer/Cetz.Renderer.csproj -c Release -o artifacts/packages
+dotnet pack src/Cetz.Renderer.WinForms/Cetz.Renderer.WinForms.csproj -c Release -o artifacts/packages
 dotnet pack src/Cetz.Renderer.Native.win-x64/Cetz.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
 ```
 

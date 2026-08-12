@@ -6,12 +6,15 @@
 - `Cetz.Renderer.Core`: 렌더 결과를 GUI 공통 RGBA 문서/페이지로 변환합니다.
 - `Cetz.Renderer.Avalonia`: 공통 문서를 표시하는 재사용 가능한 `CetzView`를 제공합니다.
 - `Cetz.Renderer.Uno`: 공통 문서를 표시하는 Uno Platform용 `CetzView`를 제공합니다.
+- `Cetz.Renderer.WinForms`: DPI, 확대/축소, 다중 페이지 스크롤을 지원하는 Windows Forms용 `CetzView`를 제공합니다.
 - `samples/Cetz.Renderer.Avalonia.Sample`: 소스를 편집하고 즉시 실제 화면을 확인하는 예제입니다.
 - `samples/Cetz.Renderer.Uno.Sample`: 같은 9개 예제를 사용하는 Uno 편집기/다중 페이지 미리보기입니다.
+- `samples/Cetz.Renderer.WinForms.Sample`: 같은 9개 예제를 사용하는 Windows Forms 편집/미리보기 예제입니다.
 - `samples/Cetz.Renderer.Demo.Shared`: 모든 GUI 데모가 함께 사용하는 9개 내장 예제 카탈로그입니다.
 
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
+dotnet run --project samples/Cetz.Renderer.WinForms.Sample
 ```
 
 Uno Desktop 데모는 다음과 같이 실행합니다. `Cetz.Renderer.Uno`는 Core의
@@ -34,6 +37,11 @@ dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
 Avalonia 데모 상단 드롭다운에서 예제를 선택하면 공용 인메모리 프로젝트가
 소스 편집기와 미리보기에 즉시 로드됩니다. 로컬 import와 SVG 자산이 필요한
 예제도 동일한 카탈로그를 통해 제공됩니다.
+
+WinForms 컨트롤은 Core의 premultiplied RGBA 페이지를 GDI+용 premultiplied
+BGRA 비트맵으로 안전하게 복사해 채널 순서와 알파를 보존합니다. 렌더 PPI,
+현재 모니터 DPI, `Zoom`을 함께 적용하고, 컨트롤 내부 스크롤 영역에서 보이는
+페이지만 그립니다. 문서 교체와 컨트롤 해제 시 소유 비트맵도 함께 해제됩니다.
 
 Typst 0.14.2와 CeTZ 0.5.2를 프로세스 내부에서 렌더링하는 프로덕션 지향 .NET 8
 SDK입니다. SVG, PNG, PDF, premultiplied RGBA8 결과를 관리 메모리로 반환하며
