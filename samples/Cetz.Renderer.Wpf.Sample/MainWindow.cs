@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Cetz.Renderer.Core;
 using Cetz.Renderer.Demo.Shared;
 
@@ -12,7 +13,7 @@ public sealed class MainWindow : Window
 {
     private static readonly Brush MutedBrush = BrushFrom("#64748B");
     private static readonly Brush SuccessBrush = BrushFrom("#087F5B");
-    private readonly CetzDocumentRenderer _renderer;
+    private readonly CetzRenderController _renderController;
     private readonly global::Cetz.Renderer.Wpf.CetzView _view = new()
     {
         Margin = new Thickness(28),
@@ -51,6 +52,21 @@ public sealed class MainWindow : Window
         MinWidth = 92,
         Padding = new Thickness(16, 7, 16, 7)
     };
+    private readonly ComboBox _zoomModePicker = new()
+    {
+        ItemsSource = Enum.GetValues<CetzZoomMode>(),
+        SelectedItem = CetzZoomMode.Custom,
+        MinWidth = 105
+    };
+    private readonly ComboBox _viewModePicker = new()
+    {
+        ItemsSource = Enum.GetValues<CetzPageViewMode>(),
+        SelectedItem = CetzPageViewMode.ContinuousSingle,
+        MinWidth = 150
+    };
+    private readonly Button _previousButton = new() { Content = "Previous", Padding = new Thickness(12, 5, 12, 5) };
+    private readonly Button _nextButton = new() { Content = "Next", Padding = new Thickness(12, 5, 12, 5) };
+    private readonly TextBlock _pageIndicator = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 72, TextAlignment = TextAlignment.Center };
     private bool _opened;
     private bool _closing;
 
@@ -64,15 +80,22 @@ public sealed class MainWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = BrushFrom("#EEF2F7");
 
-        _renderer = new CetzDocumentRenderer(new CetzRendererOptions
-        {
-            NativeLibraryPath = ResolveNativeLibrary(),
-            PackageResolution = CetzPackageResolution.EmbeddedOnly
-        });
+        _renderController = new CetzRenderController(
+            _view,
+            new CetzRendererOptions
+            {
+                NativeLibraryPath = ResolveNativeLibrary(),
+                PackageResolution = CetzPackageResolution.EmbeddedOnly
+            },
+            new DispatcherSynchronizationContext(Dispatcher));
 
         SelectDemo();
         _demoPicker.SelectionChanged += DemoSelectionChanged;
         _renderButton.Click += RenderClicked;
+        _zoomModePicker.SelectionChanged += ZoomModeSelectionChanged;
+        _viewModePicker.SelectionChanged += ViewModeSelectionChanged;
+        _previousButton.Click += PreviousClicked;
+        _nextButton.Click += NextClicked;
         Content = BuildLayout();
         ContentRendered += WindowContentRendered;
         Closing += WindowClosing;
@@ -129,6 +152,27 @@ public sealed class MainWindow : Window
             Background = BrushFrom("#DDE4EE")
         };
 
+        var previewToolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(12, 8, 12, 8)
+        };
+        previewToolbar.Children.Add(new TextBlock { Text = "Zoom", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        previewToolbar.Children.Add(_zoomModePicker);
+        previewToolbar.Children.Add(new TextBlock { Text = "View", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 6, 0) });
+        previewToolbar.Children.Add(_viewModePicker);
+        _previousButton.Margin = new Thickness(14, 0, 4, 0);
+        previewToolbar.Children.Add(_previousButton);
+        previewToolbar.Children.Add(_pageIndicator);
+        previewToolbar.Children.Add(_nextButton);
+
+        var previewPanel = new Grid();
+        previewPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        previewPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        previewPanel.Children.Add(previewToolbar);
+        Grid.SetRow(preview, 1);
+        previewPanel.Children.Add(preview);
+
         var split = new Grid();
         split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(430) });
         split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -139,8 +183,9 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 1, 0),
             Child = editor
         });
-        Grid.SetColumn(preview, 1);
-        split.Children.Add(preview);
+        Grid.SetColumn(previewPanel, 1);
+        split.Children.Add(previewPanel);
+        UpdatePageIndicator();
         return split;
     }
 
@@ -160,24 +205,49 @@ public sealed class MainWindow : Window
 
     private async void RenderClicked(object sender, RoutedEventArgs args) => await RenderAsync();
 
+    private void ZoomModeSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_zoomModePicker.SelectedItem is CetzZoomMode mode)
+            _view.SetZoomMode(mode);
+        UpdatePageIndicator();
+    }
+
+    private void ViewModeSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_viewModePicker.SelectedItem is CetzPageViewMode mode)
+            _view.SetViewMode(mode);
+        UpdatePageIndicator();
+    }
+
+    private void PreviousClicked(object sender, RoutedEventArgs args)
+    {
+        _view.MovePrevious();
+        UpdatePageIndicator();
+    }
+
+    private void NextClicked(object sender, RoutedEventArgs args)
+    {
+        _view.MoveNext();
+        UpdatePageIndicator();
+    }
+
     private async Task RenderAsync()
     {
         if (_closing || _demoPicker.SelectedItem is not CetzDemo demo)
             return;
 
         _renderButton.IsEnabled = false;
-        _demoPicker.IsEnabled = false;
         _status.Text = "Rendering...";
         _status.Foreground = MutedBrush;
         try
         {
-            var document = await _renderer.RenderProjectAsync(
+            var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text),
                 new CetzDocumentRenderOptions { Ppi = 144 });
-            if (_closing)
+            if (_closing || document is null)
                 return;
 
-            _view.Document = document;
+            UpdatePageIndicator();
             _status.Text = $"{demo.DisplayName} · {document.Pages.Count} page(s) · {document.Timing.TotalMilliseconds:F0} ms";
             _status.Foreground = SuccessBrush;
             Title = $"Cetz.Renderer WPF Sample — {_status.Text} · Typst {document.TypstVersion}";
@@ -193,11 +263,8 @@ public sealed class MainWindow : Window
         }
         finally
         {
-            if (!_closing)
-            {
+            if (!_closing && !_renderController.IsRendering)
                 _renderButton.IsEnabled = true;
-                _demoPicker.IsEnabled = true;
-            }
         }
     }
 
@@ -210,12 +277,24 @@ public sealed class MainWindow : Window
         _description.Text = demo.Description;
     }
 
-    private void WindowClosing(object? sender, CancelEventArgs args) => _closing = true;
+    private void WindowClosing(object? sender, CancelEventArgs args)
+    {
+        _closing = true;
+        _renderController.Cancel();
+    }
 
     private void WindowClosed(object? sender, EventArgs args)
     {
+        _renderController.Dispose();
         _view.Dispose();
-        _renderer.Dispose();
+    }
+
+    private void UpdatePageIndicator()
+    {
+        var count = _view.PageCount;
+        _pageIndicator.Text = count == 0 ? "0 / 0" : $"{_view.CurrentPageIndex + 1} / {count}";
+        _previousButton.IsEnabled = count > 0 && _view.CurrentPageIndex > 0;
+        _nextButton.IsEnabled = count > 0 && _view.CurrentPageIndex < count - 1;
     }
 
     private static string ResolveNativeLibrary()

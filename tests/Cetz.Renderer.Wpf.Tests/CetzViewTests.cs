@@ -1,7 +1,10 @@
 using System.Runtime.ExceptionServices;
 using System.IO;
+using System.Collections;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Cetz.Renderer.Core;
 using Cetz.Renderer.Demo.Shared;
 using Cetz.Renderer.Wpf;
@@ -48,7 +51,7 @@ public sealed class CetzViewTests(CetzRendererFixture fixture) : IClassFixture<C
     }
 
     [Fact]
-    public void ViewMeasuresAllPagesWithZoomAndSpacingAndDisposesCleanly()
+    public void ViewImplementsCommonContractAndUsesControllerLayoutNavigationAndRelease()
     {
         RunSta(() =>
         {
@@ -57,28 +60,107 @@ public sealed class CetzViewTests(CetzRendererFixture fixture) : IClassFixture<C
                 new CetzDocumentRenderOptions { Ppi = 48 });
             Assert.True(document.Pages.Count > 1);
 
-            var view = new CetzView
+            using var concrete = new CetzView();
+            ICetzDocumentView view = concrete;
+            view.SetDocument(document);
+            view.SetZoom(1.25);
+            view.SetPageSpacing(17);
+            view.SetViewport(900, 700);
+            view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+            concrete.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+            Assert.Same(document, view.Document);
+            Assert.Equal(CetzPageViewMode.ContinuousFacing, view.ViewMode);
+            Assert.Equal(document.Pages.Count, view.PageCount);
+            Assert.Equal(document.Pages.Count, view.Layout.Pages.Count);
+            Assert.InRange(concrete.DesiredSize.Width, view.Layout.ExtentWidth - 0.5, view.Layout.ExtentWidth + 0.5);
+            Assert.InRange(concrete.DesiredSize.Height, view.Layout.ExtentHeight - 0.5, view.Layout.ExtentHeight + 0.5);
+            Assert.Equal(0, view.CurrentPageIndex);
+            Assert.True(view.MoveNext());
+            Assert.Equal(2, view.CurrentPageIndex);
+            Assert.True(view.MovePrevious());
+            Assert.Equal(0, view.CurrentPageIndex);
+
+            view.SetViewMode(CetzPageViewMode.FacingPages);
+            view.GoToPage(document.Pages.Count - 1);
+            Assert.Equal((document.Pages.Count - 1) / 2 * 2, view.CurrentPageIndex);
+            Assert.InRange(view.Layout.Pages.Count, 1, 2);
+
+            view.SetZoomMode(CetzZoomMode.FitPage);
+            Assert.Equal(CetzZoomMode.FitPage, view.ZoomMode);
+            Assert.InRange(view.Zoom, CetzDocumentViewController.MinimumZoom, CetzDocumentViewController.MaximumZoom);
+
+            view.ReleaseDocument();
+            Assert.Null(view.Document);
+            Assert.Equal(0, view.PageCount);
+            Assert.Empty(view.Layout.Pages);
+
+            concrete.Dispose();
+            concrete.Dispose();
+        });
+    }
+
+    [Fact]
+    public void DependencyPropertiesRemainConvenientControllerBackedPaths()
+    {
+        RunSta(() =>
+        {
+            var document = fixture.Renderer.RenderSource("Hello");
+            using var view = new CetzView
             {
                 Document = document,
-                Zoom = 1.25,
-                PageSpacing = 17
+                Zoom = double.NaN,
+                PageSpacing = -10,
+                ZoomMode = CetzZoomMode.FitWidth,
+                ViewMode = CetzPageViewMode.SinglePage
             };
-            view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
-            var expectedWidth = document.Pages.Max(page => page.Width) * view.Zoom;
-            var expectedHeight = document.Pages.Sum(page => page.Height) * view.Zoom
-                + (document.Pages.Count - 1) * view.PageSpacing;
-            Assert.InRange(view.DesiredSize.Width, expectedWidth - 0.5, expectedWidth + 0.5);
-            Assert.InRange(view.DesiredSize.Height, expectedHeight - 0.5, expectedHeight + 0.5);
-
-            view.Zoom = double.NaN;
-            view.PageSpacing = -10;
-            Assert.Equal(1, view.Zoom);
+            Assert.IsAssignableFrom<ICetzDocumentView>(view);
+            Assert.Equal(CetzDocumentViewController.DefaultZoom, view.Zoom);
             Assert.Equal(0, view.PageSpacing);
+            Assert.Equal(CetzZoomMode.FitWidth, view.ZoomMode);
+            Assert.Equal(CetzPageViewMode.SinglePage, view.ViewMode);
+            Assert.Same(document, view.Document);
+        });
+    }
 
-            view.Dispose();
-            Assert.Null(view.Document);
-            view.Dispose();
+    [Fact]
+    public void LoadedViewReleasesPlatformBitmapResourcesWithDocument()
+    {
+        RunSta(() =>
+        {
+            var document = fixture.Renderer.RenderSource("Hello");
+            using var view = new CetzView();
+            var window = new Window
+            {
+                Content = view,
+                Width = 2,
+                Height = 2,
+                Left = -10000,
+                Top = -10000,
+                ShowActivated = false,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.None
+            };
+            try
+            {
+                window.Show();
+                view.SetDocument(document);
+                Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+
+                var bitmaps = Assert.IsAssignableFrom<ICollection>(typeof(CetzView)
+                    .GetField("_bitmaps", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(view));
+                Assert.Equal(document.Pages.Count, bitmaps.Count);
+
+                view.ReleaseDocument();
+                Assert.Empty(bitmaps);
+                Assert.Null(view.Document);
+            }
+            finally
+            {
+                window.Close();
+            }
         });
     }
 

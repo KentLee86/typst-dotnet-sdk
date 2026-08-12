@@ -6,41 +6,35 @@ using Cetz.Renderer.Core;
 namespace Cetz.Renderer.Wpf;
 
 /// <summary>
-/// Displays every page of a UI-neutral CeTZ rendered document. Place the view
-/// inside a <see cref="System.Windows.Controls.ScrollViewer"/> for scrolling.
+/// WPF drawing adapter for the framework-neutral <see cref="CetzDocumentViewController"/>.
+/// Place the view inside a <see cref="System.Windows.Controls.ScrollViewer"/> for scrolling.
 /// </summary>
-public sealed class CetzView : FrameworkElement, IDisposable
+public sealed class CetzView : FrameworkElement, ICetzDocumentView, IDisposable
 {
     public static readonly DependencyProperty DocumentProperty = DependencyProperty.Register(
-        nameof(Document),
-        typeof(CetzRenderedDocument),
-        typeof(CetzView),
-        new FrameworkPropertyMetadata(
-            default(CetzRenderedDocument),
-            FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender,
-            OnDocumentChanged));
+        nameof(Document), typeof(CetzRenderedDocument), typeof(CetzView),
+        new FrameworkPropertyMetadata(default(CetzRenderedDocument), OnDocumentChanged));
 
     public static readonly DependencyProperty ZoomProperty = DependencyProperty.Register(
-        nameof(Zoom),
-        typeof(double),
-        typeof(CetzView),
-        new FrameworkPropertyMetadata(
-            1d,
-            FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender,
-            propertyChangedCallback: null,
-            coerceValueCallback: CoerceZoom));
+        nameof(Zoom), typeof(double), typeof(CetzView),
+        new FrameworkPropertyMetadata(CetzDocumentViewController.DefaultZoom, OnZoomChanged));
 
     public static readonly DependencyProperty PageSpacingProperty = DependencyProperty.Register(
-        nameof(PageSpacing),
-        typeof(double),
-        typeof(CetzView),
-        new FrameworkPropertyMetadata(
-            24d,
-            FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender,
-            propertyChangedCallback: null,
-            coerceValueCallback: CoercePageSpacing));
+        nameof(PageSpacing), typeof(double), typeof(CetzView),
+        new FrameworkPropertyMetadata(CetzDocumentViewController.DefaultPageSpacing, OnPageSpacingChanged));
 
+    public static readonly DependencyProperty ZoomModeProperty = DependencyProperty.Register(
+        nameof(ZoomMode), typeof(CetzZoomMode), typeof(CetzView),
+        new FrameworkPropertyMetadata(CetzZoomMode.Custom, OnZoomModeChanged));
+
+    public static readonly DependencyProperty ViewModeProperty = DependencyProperty.Register(
+        nameof(ViewMode), typeof(CetzPageViewMode), typeof(CetzView),
+        new FrameworkPropertyMetadata(CetzPageViewMode.ContinuousSingle, OnViewModeChanged));
+
+    private readonly CetzDocumentViewController _controller = new();
     private readonly List<BitmapSource> _bitmaps = [];
+    private CetzRenderedDocument? _bitmapDocument;
+    private bool _synchronizing;
     private bool _disposed;
 
     public CetzView()
@@ -48,83 +42,226 @@ public sealed class CetzView : FrameworkElement, IDisposable
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
         RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.HighQuality);
+        _controller.Changed += ControllerChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        SizeChanged += OnSizeChanged;
     }
 
     public CetzRenderedDocument? Document
     {
-        get => (CetzRenderedDocument?)GetValue(DocumentProperty);
-        set => SetValue(DocumentProperty, value);
+        get => _controller.Document;
+        set => SetCurrentValue(DocumentProperty, value);
     }
 
-    /// <summary>Scale applied to device-independent page dimensions, clamped to 0.1-8.</summary>
     public double Zoom
     {
-        get => (double)GetValue(ZoomProperty);
-        set => SetValue(ZoomProperty, value);
+        get => _controller.Zoom;
+        set => SetCurrentValue(ZoomProperty, value);
     }
 
-    /// <summary>Device-independent gap between pages, clamped to 0-1000.</summary>
     public double PageSpacing
     {
-        get => (double)GetValue(PageSpacingProperty);
-        set => SetValue(PageSpacingProperty, value);
+        get => _controller.PageSpacing;
+        set => SetCurrentValue(PageSpacingProperty, value);
+    }
+
+    public CetzZoomMode ZoomMode
+    {
+        get => _controller.ZoomMode;
+        set => SetCurrentValue(ZoomModeProperty, value);
+    }
+
+    public CetzPageViewMode ViewMode
+    {
+        get => _controller.ViewMode;
+        set => SetCurrentValue(ViewModeProperty, value);
+    }
+
+    public int CurrentPageIndex => _controller.CurrentPageIndex;
+    public int PageCount => _controller.PageCount;
+    public CetzDocumentViewLayout Layout => _controller.Layout;
+
+    public void SetDocument(CetzRenderedDocument document)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(document);
+        SetCurrentValue(DocumentProperty, document);
+    }
+
+    public void SetZoom(double zoom)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        SetCurrentValue(ZoomProperty, zoom);
+    }
+
+    public void SetZoomMode(CetzZoomMode mode)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        SetCurrentValue(ZoomModeProperty, mode);
+    }
+
+    public void SetViewMode(CetzPageViewMode mode)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        SetCurrentValue(ViewModeProperty, mode);
+    }
+
+    public void SetViewport(double width, double height)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _controller.SetViewport(width, height);
+    }
+
+    public void SetPageSpacing(double pageSpacing)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        SetCurrentValue(PageSpacingProperty, pageSpacing);
+    }
+
+    public void GoToPage(int pageIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _controller.GoToPage(pageIndex);
+        BringCurrentPageIntoView();
+    }
+
+    public bool MoveNext()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var moved = _controller.MoveNext();
+        if (moved) BringCurrentPageIntoView();
+        return moved;
+    }
+
+    public bool MovePrevious()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var moved = _controller.MovePrevious();
+        if (moved) BringCurrentPageIntoView();
+        return moved;
+    }
+
+    public void ReleaseDocument()
+    {
+        if (_disposed) return;
+        ClearValue(DocumentProperty);
+        _controller.ReleaseDocument();
     }
 
     protected override Size MeasureOverride(Size availableSize)
-    {
-        var document = Document;
-        if (document is null || document.Pages.Count == 0)
-            return default;
-
-        var width = document.Pages.Max(page => page.Width) * Zoom;
-        var height = document.Pages.Sum(page => page.Height) * Zoom
-            + Math.Max(0, document.Pages.Count - 1) * PageSpacing;
-        return new Size(width, height);
-    }
+        => new(Layout.ExtentWidth, Layout.ExtentHeight);
 
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
+        if (_bitmaps.Count != PageCount) return;
 
-        var document = Document;
-        if (document is null || _bitmaps.Count != document.Pages.Count)
-            return;
-
-        var contentWidth = document.Pages.Max(page => page.Width) * Zoom;
-        var availableWidth = Math.Max(ActualWidth, contentWidth);
-        var y = 0d;
-        for (var index = 0; index < document.Pages.Count; index++)
-        {
-            var page = document.Pages[index];
-            var width = page.Width * Zoom;
-            var height = page.Height * Zoom;
-            var x = (availableWidth - width) / 2d;
-            drawingContext.DrawImage(_bitmaps[index], new Rect(x, y, width, height));
-            y += height + PageSpacing;
-        }
+        foreach (var page in Layout.Pages)
+            drawingContext.DrawImage(
+                _bitmaps[page.PageIndex],
+                new Rect(page.X, page.Y, page.Width, page.Height));
     }
 
-    /// <summary>Releases cached page images and the document reference.</summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
+        if (_disposed) return;
         _disposed = true;
+        _controller.Changed -= ControllerChanged;
         Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
+        SizeChanged -= OnSizeChanged;
+        _controller.ReleaseDocument();
         ClearBitmaps();
         ClearValue(DocumentProperty);
         GC.SuppressFinalize(this);
     }
 
-    private static void OnDocumentChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
-        => ((CetzView)dependencyObject).RebuildBitmaps();
+    private static void OnDocumentChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)owner;
+        if (view._synchronizing || view._disposed) return;
+        if (args.NewValue is CetzRenderedDocument document)
+            view._controller.SetDocument(document);
+        else
+            view._controller.ReleaseDocument();
+    }
+
+    private static void OnZoomChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)owner;
+        if (!view._synchronizing && !view._disposed)
+        {
+            view._controller.SetZoom((double)args.NewValue);
+            view.SynchronizeDependencyProperties();
+        }
+    }
+
+    private static void OnPageSpacingChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)owner;
+        if (!view._synchronizing && !view._disposed)
+        {
+            view._controller.SetPageSpacing((double)args.NewValue);
+            view.SynchronizeDependencyProperties();
+        }
+    }
+
+    private static void OnZoomModeChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)owner;
+        if (!view._synchronizing && !view._disposed)
+            view._controller.SetZoomMode((CetzZoomMode)args.NewValue);
+    }
+
+    private static void OnViewModeChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
+    {
+        var view = (CetzView)owner;
+        if (!view._synchronizing && !view._disposed)
+            view._controller.SetViewMode((CetzPageViewMode)args.NewValue);
+    }
+
+    private void ControllerChanged(object? sender, EventArgs args)
+    {
+        SynchronizeDependencyProperties();
+
+        if (!ReferenceEquals(_bitmapDocument, _controller.Document))
+            RebuildBitmaps();
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void SynchronizeDependencyProperties()
+    {
+        _synchronizing = true;
+        try
+        {
+            SetCurrentValue(DocumentProperty, _controller.Document);
+            SetCurrentValue(ZoomProperty, _controller.Zoom);
+            SetCurrentValue(PageSpacingProperty, _controller.PageSpacing);
+            SetCurrentValue(ZoomModeProperty, _controller.ZoomMode);
+            SetCurrentValue(ViewModeProperty, _controller.ViewMode);
+        }
+        finally
+        {
+            _synchronizing = false;
+        }
+
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs args)
+        => _controller.SetViewport(ActualWidth, ActualHeight);
+
+    private void BringCurrentPageIntoView()
+    {
+        var page = Layout.Pages.FirstOrDefault(candidate => candidate.PageIndex == CurrentPageIndex);
+        if (page.Width > 0 && page.Height > 0)
+            BringIntoView(new Rect(page.X, page.Y, page.Width, page.Height));
+    }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
+        _controller.SetViewport(ActualWidth, ActualHeight);
         if (!_disposed && _bitmaps.Count == 0 && Document is not null)
             RebuildBitmaps();
     }
@@ -134,9 +271,8 @@ public sealed class CetzView : FrameworkElement, IDisposable
     private void RebuildBitmaps()
     {
         ClearBitmaps();
-        if (_disposed || !IsLoaded || Document is null)
-            return;
-
+        _bitmapDocument = Document;
+        if (_disposed || !IsLoaded || Document is null) return;
         foreach (var page in Document.Pages)
             _bitmaps.Add(CetzBitmapSource.Create(page));
     }
@@ -144,19 +280,8 @@ public sealed class CetzView : FrameworkElement, IDisposable
     private void ClearBitmaps()
     {
         _bitmaps.Clear();
+        _bitmapDocument = null;
         InvalidateMeasure();
         InvalidateVisual();
-    }
-
-    private static object CoerceZoom(DependencyObject owner, object value)
-    {
-        var zoom = (double)value;
-        return double.IsFinite(zoom) ? Math.Clamp(zoom, 0.1d, 8d) : 1d;
-    }
-
-    private static object CoercePageSpacing(DependencyObject owner, object value)
-    {
-        var spacing = (double)value;
-        return double.IsFinite(spacing) ? Math.Clamp(spacing, 0d, 1000d) : 24d;
     }
 }
