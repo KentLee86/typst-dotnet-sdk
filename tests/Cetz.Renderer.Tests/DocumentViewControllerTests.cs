@@ -135,6 +135,24 @@ public sealed class DocumentViewControllerTests
         Assert.Equal(74, controller.Layout.Pages[2].Y, precision: 2);
     }
 
+    [Fact]
+    public void ReplacingWithShorterDocumentKeepsFacingPageAtSpreadStart()
+    {
+        using var renderer = CreateRenderer();
+        var controller = new CetzDocumentViewController();
+        controller.SetDocument(RenderFourPages(renderer));
+        controller.SetViewMode(CetzPageViewMode.FacingPages);
+        controller.GoToPage(2);
+        var twoPages = renderer.RenderSource(
+            "One\n#pagebreak()\nTwo",
+            options: new CetzDocumentRenderOptions { Ppi = 96 });
+
+        controller.SetDocument(twoPages);
+
+        Assert.Equal(0, controller.CurrentPageIndex);
+        Assert.Equal([0, 1], controller.Layout.Pages.Select(page => page.PageIndex));
+    }
+
     private static CetzDocumentRenderer CreateRenderer()
         => new(new CetzRendererOptions
         {
