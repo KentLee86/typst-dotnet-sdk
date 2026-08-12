@@ -293,19 +293,33 @@ await result.WriteToDirectoryAsync("rendered");
 
 ## 빌드 및 테스트
 
-```powershell
-cargo test --locked
-cargo build --release --locked
-New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
-Copy-Item target/release/typst_dotnet_native.dll artifacts/native/win-x64/
-dotnet test -c Release
-dotnet pack src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj -c Release -o artifacts/packages
-dotnet build samples/Typst.Renderer.WinUI.Sample -c Release
-dotnet pack src/Typst.Renderer/Typst.Renderer.csproj -c Release -o artifacts/packages
-dotnet pack src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj -c Release -o artifacts/packages
-dotnet pack src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
-./eng/pack-and-verify.ps1 -Rid win-x64
+[just](https://just.systems/)를 설치한 뒤 다음 명령을 실행합니다.
+
+```shell
+just native
+just verify
+just pack
 ```
+
+`just native`는 `win-x64` 또는 `linux-x64` RID를 감지하고 Rust release
+라이브러리를 빌드한 뒤 `artifacts/native/{rid}/`에 배치합니다. `just verify`는
+Rust 포맷 검사, Clippy, Rust 테스트와 관리 코드 테스트까지 실행합니다.
+`just pack`은 RID 패키지 검사와 깨끗한 NuGet 소비자 검증을 수행하며 Windows에서는
+Windows PowerShell, Linux에서는 `pwsh`가 필요합니다.
+
+릴리스 준비도 자동화되어 있습니다.
+
+```shell
+just bump-version 0.2.0
+just sync-readme-ko v0.1.0
+# 또는 두 단계를 순서대로 실행합니다.
+just release 0.2.0 v0.1.0
+```
+
+릴리스 태그가 생긴 뒤에는 기준 태그를 생략할 수 있으며, 이 경우 가장 최근의 이전
+태그를 자동으로 찾습니다. README 동기화는 read-only `codex exec`를
+`gpt-5.6-luna`와 medium reasoning으로 실행하고 구조화된 출력을 검증한 뒤
+`README.ko.md`만 기록합니다.
 
 저장소는 Rust `cdylib`에 Typst, CeTZ 및 oxifmt를 직접 링크하며 빌드 또는 실행 시
 `cetz-renderer` 저장소에 의존하지 않습니다.

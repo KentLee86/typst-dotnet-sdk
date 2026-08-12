@@ -293,19 +293,33 @@ strings and result buffers are copied and released before public results return.
 
 ## Build and test
 
-```powershell
-cargo test --locked
-cargo build --release --locked
-New-Item -ItemType Directory -Force artifacts/native/win-x64 | Out-Null
-Copy-Item target/release/typst_dotnet_native.dll artifacts/native/win-x64/
-dotnet test -c Release
-dotnet pack src/Typst.Renderer.Wpf/Typst.Renderer.Wpf.csproj -c Release -o artifacts/packages
-dotnet build samples/Typst.Renderer.WinUI.Sample -c Release
-dotnet pack src/Typst.Renderer/Typst.Renderer.csproj -c Release -o artifacts/packages
-dotnet pack src/Typst.Renderer.WinForms/Typst.Renderer.WinForms.csproj -c Release -o artifacts/packages
-dotnet pack src/Typst.Renderer.Native.win-x64/Typst.Renderer.Native.win-x64.csproj -c Release -o artifacts/packages
-./eng/pack-and-verify.ps1 -Rid win-x64
+Install [just](https://just.systems/) and run:
+
+```shell
+just native
+just verify
+just pack
 ```
+
+`just native` detects `win-x64` or `linux-x64`, builds the Rust release library,
+and stages it under `artifacts/native/{rid}/`. `just verify` also runs Rust
+formatting, Clippy, Rust tests, and the managed test suite. `just pack` performs
+the RID package inspection and clean NuGet consumer validation and requires
+Windows PowerShell on Windows or `pwsh` on Linux.
+
+Release preparation is automated as well:
+
+```shell
+just bump-version 0.2.0
+just sync-readme-ko v0.1.0
+# Or run both steps in order:
+just release 0.2.0 v0.1.0
+```
+
+The base tag may be omitted after release tags exist; the latest previous tag is
+then detected automatically. README synchronization invokes read-only
+`codex exec` with `gpt-5.6-luna` and medium reasoning, validates its structured
+output, and writes only `README.ko.md`.
 
 The repository directly links Typst, CeTZ, and oxifmt in its Rust `cdylib`; it
 does not depend on the `cetz-renderer` repository at build time or runtime.

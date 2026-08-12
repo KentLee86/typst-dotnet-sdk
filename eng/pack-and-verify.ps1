@@ -138,6 +138,16 @@ if ($Rid -eq 'win-x64') {
 }
 
 $currentRid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
+if ([string]::IsNullOrWhiteSpace($currentRid)) {
+    $runtimeInformation = [System.Runtime.InteropServices.RuntimeInformation]
+    $osPlatform = [System.Runtime.InteropServices.OSPlatform]
+    $architecture = $runtimeInformation::ProcessArchitecture.ToString().ToLowerInvariant()
+    if ($runtimeInformation::IsOSPlatform($osPlatform::Windows)) {
+        $currentRid = "win-$architecture"
+    } elseif ($runtimeInformation::IsOSPlatform($osPlatform::Linux)) {
+        $currentRid = "linux-$architecture"
+    }
+}
 if ($currentRid -eq $Rid) {
     $consumer = Join-Path $root "artifacts/consumer/$Rid"
     if (Test-Path $consumer) { Remove-Item -Recurse -Force $consumer }
