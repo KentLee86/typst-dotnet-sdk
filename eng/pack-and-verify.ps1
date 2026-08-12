@@ -42,7 +42,9 @@ try {
 $unoZip = [System.IO.Compression.ZipFile]::OpenRead($unoPackage)
 try {
     $entries = $unoZip.Entries.FullName
-    foreach ($framework in @('net8.0', 'net8.0-desktop1.0', 'net8.0-windows10.0.26100')) {
+    $unoFrameworks = @('net8.0', 'net8.0-desktop1.0')
+    if ($Rid -eq 'win-x64') { $unoFrameworks += 'net8.0-windows10.0.26100' }
+    foreach ($framework in $unoFrameworks) {
         $assembly = "lib/$framework/Typst.Renderer.Uno.dll"
         if (-not ($entries -contains $assembly)) { throw "Uno package does not contain $assembly" }
     }
@@ -53,8 +55,8 @@ try {
     try { [xml]$unoNuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
     $coreDependencies = @($unoNuspec.package.metadata.dependencies.group.dependency |
         Where-Object id -eq 'Typst.Renderer.Core')
-    if ($coreDependencies.Count -ne 3) {
-        throw 'Uno package must depend on Typst.Renderer.Core for all three supported target frameworks.'
+    if ($coreDependencies.Count -ne $unoFrameworks.Count) {
+        throw "Uno package must depend on Typst.Renderer.Core for all $($unoFrameworks.Count) packed target frameworks."
     }
 } finally { $unoZip.Dispose() }
 
