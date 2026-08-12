@@ -85,6 +85,8 @@ public sealed class MainWindow : Window
         };
         _previousPage.Click += (_, _) => { _view.MovePrevious(); UpdatePageStatus(); };
         _nextPage.Click += (_, _) => { _view.MoveNext(); UpdatePageStatus(); };
+        _view.SetZoomMode((CetzZoomMode)_zoomModePicker.SelectedItem!);
+        _view.SetViewMode((CetzPageViewMode)_viewModePicker.SelectedItem!);
         Closed += (_, _) =>
         {
             _renderController.Dispose();

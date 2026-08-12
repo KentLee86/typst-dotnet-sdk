@@ -31,6 +31,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     private readonly List<Bitmap> _bitmaps = [];
     private readonly CetzDocumentViewController _controller = new();
     private bool _disposed;
+    private bool _synchronizingProperties;
 
     static CetzView()
     {
@@ -46,25 +47,25 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
 
     public double Zoom
     {
-        get => _controller.Zoom;
+        get => GetValue(ZoomProperty);
         set => SetValue(ZoomProperty, value);
     }
 
     public double PageSpacing
     {
-        get => _controller.PageSpacing;
+        get => GetValue(PageSpacingProperty);
         set => SetValue(PageSpacingProperty, value);
     }
 
     public CetzZoomMode ZoomMode
     {
-        get => _controller.ZoomMode;
+        get => GetValue(ZoomModeProperty);
         set => SetValue(ZoomModeProperty, value);
     }
 
     public CetzPageViewMode ViewMode
     {
-        get => _controller.ViewMode;
+        get => GetValue(ViewModeProperty);
         set => SetValue(ViewModeProperty, value);
     }
 
@@ -79,6 +80,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     public void SetViewport(double width, double height)
     {
         _controller.SetViewport(width, height);
+        SynchronizeProperties();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -91,6 +93,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (_synchronizingProperties) return;
         if (change.Property == DocumentProperty)
         {
             var document = change.GetNewValue<CetzRenderedDocument?>();
@@ -100,6 +103,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
         else if (change.Property == ZoomProperty)
         {
             _controller.SetZoom(change.GetNewValue<double>());
+            SynchronizeProperties();
         }
         else if (change.Property == PageSpacingProperty)
         {
@@ -108,6 +112,7 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
         else if (change.Property == ZoomModeProperty)
         {
             _controller.SetZoomMode(change.GetNewValue<CetzZoomMode>());
+            SynchronizeProperties();
         }
         else if (change.Property == ViewModeProperty)
             _controller.SetViewMode(change.GetNewValue<CetzPageViewMode>());
@@ -207,6 +212,19 @@ public sealed class CetzView : Control, ICetzDocumentView, IDisposable
         if (placement.Width <= 0 || placement.Height <= 0) return;
         Dispatcher.UIThread.Post(() => ControlExtensions.BringIntoView(this,
             new Rect(placement.X, placement.Y, placement.Width, placement.Height)));
+    }
+
+    private void SynchronizeProperties()
+    {
+        _synchronizingProperties = true;
+        try
+        {
+            SetCurrentValue(ZoomModeProperty, _controller.ZoomMode);
+            SetCurrentValue(ZoomProperty, _controller.Zoom);
+            SetCurrentValue(ViewModeProperty, _controller.ViewMode);
+            SetCurrentValue(PageSpacingProperty, _controller.PageSpacing);
+        }
+        finally { _synchronizingProperties = false; }
     }
 
 }
