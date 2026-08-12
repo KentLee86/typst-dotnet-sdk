@@ -10,15 +10,17 @@ namespace Cetz.Renderer.Uno.Sample;
 
 public sealed partial class MainPage : Page
 {
-    private CetzDocumentRenderer? _renderer;
+    private CetzRenderController? _renderController;
+    private bool _loaded;
     private bool _disposed;
 
     public MainPage()
     {
         InitializeComponent();
         DemoPicker.ItemsSource = CetzDemoCatalog.All;
-        DemoPicker.SelectionChanged += OnDemoSelectionChanged;
         DemoPicker.SelectedIndex = 0;
+        LoadSelectedDemo();
+        DemoPicker.SelectionChanged += OnDemoSelectionChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -32,24 +34,42 @@ public sealed partial class MainPage : Page
         Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
         DemoPicker.SelectionChanged -= OnDemoSelectionChanged;
+        if (_renderController is not null)
+        {
+            _renderController.StateChanged -= OnRenderStateChanged;
+            _renderController.Dispose();
+            _renderController = null;
+        }
         ((IDisposable)Preview).Dispose();
-        _renderer?.Dispose();
-        _renderer = null;
         GC.SuppressFinalize(this);
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs args) => await RenderAsync();
+    private async void OnLoaded(object sender, RoutedEventArgs args)
+    {
+        _loaded = true;
+        Preview.SetViewport(
+            Math.Max(0, PreviewScroller.ActualWidth - 56),
+            Math.Max(0, PreviewScroller.ActualHeight - 56));
+        await RenderAsync();
+    }
 
     private void OnUnloaded(object sender, RoutedEventArgs args) => DisposeResources();
 
-    private void OnDemoSelectionChanged(object sender, SelectionChangedEventArgs args)
+    private async void OnDemoSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        LoadSelectedDemo();
+        if (_loaded)
+            await RenderAsync();
+    }
+
+    private void LoadSelectedDemo()
     {
         if (DemoPicker.SelectedItem is not CetzDemo demo)
             return;
 
         SourceEditor.Text = demo.Source;
         DescriptionText.Text = demo.Description;
-        StatusText.Text = $"Loaded {demo.DisplayName}. Select Render to refresh the preview.";
+        StatusText.Text = $"Loaded {demo.DisplayName}; rendering automatically.";
         StatusText.Foreground = new SolidColorBrush(Colors.SlateGray);
     }
 
@@ -60,8 +80,73 @@ public sealed partial class MainPage : Page
         if (Preview is null || ZoomText is null)
             return;
 
-        Preview.Zoom = args.NewValue;
-        ZoomText.Text = $"{args.NewValue:P0}";
+        Preview.SetZoom(args.NewValue);
+        if (ZoomModePicker is not null)
+            ZoomModePicker.SelectedIndex = 0;
+        UpdateViewStatus();
+    }
+
+    private void OnZoomModeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (Preview is null || ZoomModePicker is null)
+            return;
+
+        var mode = ZoomModePicker.SelectedIndex switch
+        {
+            1 => CetzZoomMode.FitWidth,
+            2 => CetzZoomMode.FitPage,
+            _ => CetzZoomMode.Custom
+        };
+        Preview.SetZoomMode(mode);
+        ZoomSlider.IsEnabled = mode == CetzZoomMode.Custom;
+        UpdateViewStatus();
+    }
+
+    private void OnViewModeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (Preview is null || ViewModePicker is null)
+            return;
+
+        Preview.SetViewMode(ViewModePicker.SelectedIndex switch
+        {
+            1 => CetzPageViewMode.ContinuousFacing,
+            2 => CetzPageViewMode.SinglePage,
+            3 => CetzPageViewMode.FacingPages,
+            _ => CetzPageViewMode.ContinuousSingle
+        });
+        UpdateViewStatus();
+    }
+
+    private void OnPreviousClicked(object sender, RoutedEventArgs args)
+    {
+        Preview.MovePrevious();
+        UpdateViewStatus();
+    }
+
+    private void OnNextClicked(object sender, RoutedEventArgs args)
+    {
+        Preview.MoveNext();
+        UpdateViewStatus();
+    }
+
+    private void OnPreviewViewportChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (Preview is null)
+            return;
+
+        Preview.SetViewport(Math.Max(0, args.NewSize.Width - 56), Math.Max(0, args.NewSize.Height - 56));
+        UpdateViewStatus();
+    }
+
+    private void UpdateViewStatus()
+    {
+        if (Preview is null || ZoomText is null || PageIndicator is null)
+            return;
+
+        ZoomText.Text = $"{Preview.Zoom:P0}";
+        PageIndicator.Text = Preview.PageCount == 0
+            ? "0 / 0"
+            : $"{Preview.CurrentPageIndex + 1} / {Preview.PageCount}";
     }
 
     private async Task RenderAsync()
@@ -69,50 +154,56 @@ public sealed partial class MainPage : Page
         if (_disposed || DemoPicker.SelectedItem is not CetzDemo demo)
             return;
 
-        RenderButton.IsEnabled = false;
-        DemoPicker.IsEnabled = false;
+        var controller = EnsureRenderController();
         StatusText.Text = "Rendering…";
         StatusText.Foreground = new SolidColorBrush(Colors.SlateGray);
 
         try
         {
-            _renderer ??= CreateRenderer();
-            var document = await _renderer.RenderProjectAsync(
+            var document = await controller.RenderProjectAsync(
                 demo.CreateProject(SourceEditor.Text ?? string.Empty),
                 new CetzDocumentRenderOptions { Ppi = 144 });
 
-            if (_disposed)
+            if (_disposed || document is null)
                 return;
 
-            Preview.Document = document;
+            UpdateViewStatus();
             var milliseconds = document.Timing.TotalMilliseconds;
             StatusText.Text = $"{document.Pages.Count} page(s) · {milliseconds:F1} ms · {document.Ppi:F0} DPI";
             StatusText.Foreground = new SolidColorBrush(Colors.SeaGreen);
         }
         catch (Exception exception)
         {
-            if (_disposed)
+            if (_disposed || !ReferenceEquals(controller.LastError, exception))
                 return;
 
-            Preview.Document = null;
             StatusText.Text = exception.Message;
             StatusText.Foreground = new SolidColorBrush(Colors.Crimson);
         }
-        finally
-        {
-            if (!_disposed)
-            {
-                RenderButton.IsEnabled = true;
-                DemoPicker.IsEnabled = true;
-            }
-        }
     }
 
-    private static CetzDocumentRenderer CreateRenderer() => new(new CetzRendererOptions
+    private CetzRenderController EnsureRenderController()
     {
-        NativeLibraryPath = ResolveNativeLibrary(),
-        PackageResolution = CetzPackageResolution.EmbeddedOnly
-    });
+        if (_renderController is not null)
+            return _renderController;
+
+        _renderController = new CetzRenderController(
+            Preview,
+            new CetzRendererOptions
+            {
+                NativeLibraryPath = ResolveNativeLibrary(),
+                PackageResolution = CetzPackageResolution.EmbeddedOnly
+            },
+            SynchronizationContext.Current);
+        _renderController.StateChanged += OnRenderStateChanged;
+        return _renderController;
+    }
+
+    private void OnRenderStateChanged(object? sender, EventArgs args)
+    {
+        if (!_disposed && _renderController is not null)
+            RenderButton.IsEnabled = !_renderController.IsRendering;
+    }
 
     private static string ResolveNativeLibrary()
     {

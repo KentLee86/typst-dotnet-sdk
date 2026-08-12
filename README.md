@@ -60,29 +60,28 @@ Reference the UI adapter in addition to the native RID package:
 <PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
 ```
 
-The Uno adapter accepts the same UI-neutral Core document. It converts the
-premultiplied RGBA pages to WinUI's premultiplied BGRA layout, preserves their
-physical size at 96 device-independent pixels per inch, and stacks every page
-with configurable zoom and spacing:
+The Uno adapter implements the shared `ICetzDocumentView` contract and delegates
+zoom fitting, page modes, navigation, and exact placement to
+`CetzDocumentViewController`. It converts premultiplied RGBA pages to WinUI's
+premultiplied BGRA layout; the adapter owns only Uno bitmap and visual resources:
 
 ```csharp
 using Cetz.Renderer.Core;
 using Cetz.Renderer.Uno;
 
-using var renderer = new CetzDocumentRenderer();
-var document = await renderer.RenderSourceAsync(typstSource);
-
-var view = new CetzView
-{
-    Document = document,
-    Zoom = 1.0,
-    PageSpacing = 24
-};
+var view = new CetzView();
+view.SetViewport(1200, 800);
+using var renderController = new CetzRenderController(view);
+await renderController.RenderSourceAsync(typstSource);
+view.SetZoomMode(CetzZoomMode.FitWidth);
+view.SetViewMode(CetzPageViewMode.ContinuousFacing);
+view.MoveNext();
 ```
 
 Run the desktop Uno editor and scrolling multi-page preview from the repository
 root. It uses the same nine `Cetz.Renderer.Demo.Shared` examples as the Avalonia
-sample:
+sample and exposes custom/width/page zoom, continuous/single/facing page modes,
+and previous/next navigation:
 
 ```powershell
 dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop

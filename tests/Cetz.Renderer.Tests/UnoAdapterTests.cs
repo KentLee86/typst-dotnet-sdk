@@ -1,10 +1,15 @@
 using Cetz.Renderer.Uno;
+using Cetz.Renderer.Core;
 using Xunit;
 
 namespace Cetz.Renderer.Tests;
 
 public sealed class UnoAdapterTests
 {
+    [Fact]
+    public void ViewImplementsSharedDocumentContract()
+        => Assert.True(typeof(ICetzDocumentView).IsAssignableFrom(typeof(CetzView)));
+
     [Fact]
     public void ConvertsPaddedPremultipliedRgbaRowsToTightlyPackedBgra()
     {
@@ -20,22 +25,6 @@ public sealed class UnoAdapterTests
             [30, 20, 10, 40, 70, 60, 50, 80, 110, 100, 90, 120, 150, 140, 130, 160],
             converted);
     }
-
-    [Theory]
-    [InlineData(double.NaN, 1)]
-    [InlineData(0, 0.1)]
-    [InlineData(20, 8)]
-    [InlineData(1.25, 1.25)]
-    public void NormalizesZoom(double value, double expected)
-        => Assert.Equal(expected, CetzUnoLayout.NormalizeZoom(value));
-
-    [Theory]
-    [InlineData(double.NaN, 24)]
-    [InlineData(-1, 0)]
-    [InlineData(2048, 1024)]
-    [InlineData(18.5, 18.5)]
-    public void NormalizesPageSpacing(double value, double expected)
-        => Assert.Equal(expected, CetzUnoLayout.NormalizePageSpacing(value));
 
     [Theory]
     [InlineData(0, 1, 4)]

@@ -31,12 +31,32 @@
     </Grid>
 
     <Grid Grid.Column="1" RowDefinitions="Auto,*">
-      <Grid Padding="22,14" ColumnDefinitions="Auto,180,Auto" ColumnSpacing="12" Background="#F8FAFC">
-        <TextBlock Text="Preview zoom" VerticalAlignment="Center" />
-        <Slider x:Name="ZoomSlider" Grid.Column="1" Minimum="0.25" Maximum="2" Value="0.9" StepFrequency="0.05" ValueChanged="OnZoomChanged" />
-        <TextBlock x:Name="ZoomText" Grid.Column="2" Text="90%" VerticalAlignment="Center" />
-      </Grid>
-      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+      <StackPanel Padding="18,12" Orientation="Horizontal" Spacing="10" Background="#F8FAFC">
+        <TextBlock Text="Zoom" VerticalAlignment="Center" />
+        <ComboBox x:Name="ZoomModePicker" Width="120" SelectedIndex="0" SelectionChanged="OnZoomModeChanged">
+          <ComboBoxItem Content="Custom" />
+          <ComboBoxItem Content="Fit width" />
+          <ComboBoxItem Content="Fit page" />
+        </ComboBox>
+        <Slider x:Name="ZoomSlider" Width="150" Minimum="0.1" Maximum="8" Value="0.9" StepFrequency="0.05" ValueChanged="OnZoomChanged" />
+        <TextBlock x:Name="ZoomText" Text="90%" VerticalAlignment="Center" MinWidth="48" />
+        <TextBlock Text="View" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <ComboBox x:Name="ViewModePicker" Width="160" SelectedIndex="0" SelectionChanged="OnViewModeChanged">
+          <ComboBoxItem Content="Continuous (1)" />
+          <ComboBoxItem Content="Continuous (2)" />
+          <ComboBoxItem Content="Single page" />
+          <ComboBoxItem Content="Facing pages" />
+        </ComboBox>
+        <Button Content="Previous" Click="OnPreviousClicked" />
+        <Button Content="Next" Click="OnNextClicked" />
+        <TextBlock x:Name="PageIndicator" Text="0 / 0" VerticalAlignment="Center" />
+      </StackPanel>
+      <ScrollViewer
+          x:Name="PreviewScroller"
+          Grid.Row="1"
+          HorizontalScrollBarVisibility="Auto"
+          VerticalScrollBarVisibility="Auto"
+          SizeChanged="OnPreviewViewportChanged">
         <Border Padding="28">
           <cetz:CetzView x:Name="Preview" Zoom="0.9" PageSpacing="24" />
         </Border>
