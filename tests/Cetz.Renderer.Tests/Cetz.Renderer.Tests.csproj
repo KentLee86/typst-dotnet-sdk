@@ -10,6 +10,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <ProjectReference Include="..\..\src\Cetz.Renderer\Cetz.Renderer.csproj" />
     <ProjectReference Include="..\..\src\Cetz.Renderer.Core\Cetz.Renderer.Core.csproj" />
+    <ProjectReference Include="..\..\src\Cetz.Renderer.Uno\Cetz.Renderer.Uno.csproj" />
     <ProjectReference Include="..\..\samples\Cetz.Renderer.Demo.Shared\Cetz.Renderer.Demo.Shared.csproj" />
   </ItemGroup>
 </Project>

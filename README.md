@@ -20,7 +20,8 @@ framework:
 
 - `Cetz.Renderer.Core` turns renderer results into display-ready RGBA documents.
 - `Cetz.Renderer.Avalonia` displays those documents with a reusable `CetzView`.
-- Additional GUI packages can consume the same Core document model.
+- `Cetz.Renderer.Uno` displays those documents with a reusable WinUI/Uno
+  `CetzView`.
 
 ## Avalonia
 
@@ -49,6 +50,49 @@ dotnet run --project samples/Cetz.Renderer.Avalonia.Sample
 The sample's demo selector is backed by `Cetz.Renderer.Demo.Shared`. Its nine
 embedded examples are UI-independent in-memory projects, so future WPF, WinUI,
 Uno, or other GUI demos can reuse the same catalog without copying files again.
+
+## Uno Platform
+
+Reference the UI adapter in addition to the native RID package:
+
+```xml
+<PackageReference Include="Cetz.Renderer.Uno" Version="0.1.0" />
+<PackageReference Include="Cetz.Renderer.Native.win-x64" Version="0.1.0" />
+```
+
+The Uno adapter accepts the same UI-neutral Core document. It converts the
+premultiplied RGBA pages to WinUI's premultiplied BGRA layout, preserves their
+physical size at 96 device-independent pixels per inch, and stacks every page
+with configurable zoom and spacing:
+
+```csharp
+using Cetz.Renderer.Core;
+using Cetz.Renderer.Uno;
+
+using var renderer = new CetzDocumentRenderer();
+var document = await renderer.RenderSourceAsync(typstSource);
+
+var view = new CetzView
+{
+    Document = document,
+    Zoom = 1.0,
+    PageSpacing = 24
+};
+```
+
+Run the desktop Uno editor and scrolling multi-page preview from the repository
+root. It uses the same nine `Cetz.Renderer.Demo.Shared` examples as the Avalonia
+sample:
+
+```powershell
+dotnet run --project samples/Cetz.Renderer.Uno.Sample -f net8.0-desktop
+```
+
+Set `CETZ_NATIVE_LIBRARY` to a built `cetz_dotnet_native.dll` when it is not
+available under `artifacts/native/win-x64/` before building the sample.
+The verified targets are `net8.0-desktop` (Skia Desktop) and
+`net8.0-windows10.0.26100` (Windows App SDK). The adapter package also contains
+the framework-neutral `net8.0` Uno asset for other Uno heads.
 
 ## Memory rendering
 

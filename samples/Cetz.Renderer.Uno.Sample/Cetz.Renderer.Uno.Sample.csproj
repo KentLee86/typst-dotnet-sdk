@@ -1,0 +1,25 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows10.0.26100;net8.0-desktop</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+    <ApplicationTitle>Cetz.Renderer Uno Sample</ApplicationTitle>
+    <ApplicationId>com.kentlee86.cetzrenderer.uno.sample</ApplicationId>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationPublisher>KentLee86</ApplicationPublisher>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <Description>Interactive Uno Platform sample for Cetz.Renderer.</Description>
+    <UnoFeatures />
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cetz.Renderer.Uno\Cetz.Renderer.Uno.csproj" />
+    <ProjectReference Include="..\Cetz.Renderer.Demo.Shared\Cetz.Renderer.Demo.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\artifacts\native\win-x64\cetz_dotnet_native.dll"
+          Link="cetz_dotnet_native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\artifacts\native\win-x64\cetz_dotnet_native.dll')" />
+  </ItemGroup>
+</Project>

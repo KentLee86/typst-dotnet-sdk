@@ -1,0 +1,46 @@
+<Page
+    x:Class="Cetz.Renderer.Uno.Sample.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:cetz="using:Cetz.Renderer.Uno"
+    Background="#EEF2F7">
+  <Grid ColumnDefinitions="420,*">
+    <Grid Grid.Column="0" Padding="22" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12" Background="White">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Demo resource" FontWeight="SemiBold" />
+        <ComboBox x:Name="DemoPicker" HorizontalAlignment="Stretch" DisplayMemberPath="DisplayName" />
+        <TextBlock x:Name="DescriptionText" Foreground="#64748B" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+        <TextBlock Text="Typst / CeTZ source" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <Button x:Name="RenderButton" Grid.Column="1" Content="Render" Click="OnRenderClicked" />
+      </Grid>
+
+      <TextBox
+          x:Name="SourceEditor"
+          Grid.Row="2"
+          AcceptsReturn="True"
+          FontFamily="Consolas"
+          FontSize="13"
+          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+          TextWrapping="NoWrap"
+          ScrollViewer.VerticalScrollBarVisibility="Auto" />
+
+      <TextBlock x:Name="StatusText" Grid.Row="3" Text="Ready" Foreground="#64748B" TextWrapping="Wrap" />
+    </Grid>
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
+      <Grid Padding="22,14" ColumnDefinitions="Auto,180,Auto" ColumnSpacing="12" Background="#F8FAFC">
+        <TextBlock Text="Preview zoom" VerticalAlignment="Center" />
+        <Slider x:Name="ZoomSlider" Grid.Column="1" Minimum="0.25" Maximum="2" Value="0.9" StepFrequency="0.05" ValueChanged="OnZoomChanged" />
+        <TextBlock x:Name="ZoomText" Grid.Column="2" Text="90%" VerticalAlignment="Center" />
+      </Grid>
+      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <Border Padding="28">
+          <cetz:CetzView x:Name="Preview" Zoom="0.9" PageSpacing="24" />
+        </Border>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Page>
