@@ -62,6 +62,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $manifest = Get-Content eng/native-release.json | ConvertFrom-Json
           New-Item -ItemType Directory -Force 'artifacts/native/${{ matrix.rid }}' | Out-Null
           gh release download $manifest.tag `
