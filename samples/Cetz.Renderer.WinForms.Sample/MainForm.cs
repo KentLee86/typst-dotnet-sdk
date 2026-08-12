@@ -5,7 +5,8 @@ namespace Cetz.Renderer.WinForms.Sample;
 
 public sealed class MainForm : Form
 {
-    private readonly CetzDocumentRenderer _renderer;
+    private readonly CetzRendererOptions _rendererOptions;
+    private CetzRenderController? _renderController;
     private readonly global::Cetz.Renderer.WinForms.CetzView _preview = new()
     {
         Dock = DockStyle.Fill,
@@ -48,6 +49,20 @@ public sealed class MainForm : Form
         AutoSize = true,
         Text = "렌더링"
     };
+    private readonly ComboBox _zoomModePicker = CreateEnumPicker();
+    private readonly ComboBox _viewModePicker = CreateEnumPicker();
+    private readonly NumericUpDown _zoom = new()
+    {
+        DecimalPlaces = 2,
+        Increment = 0.1m,
+        Minimum = 0.1m,
+        Maximum = 8m,
+        Value = 0.9m,
+        Width = 64
+    };
+    private readonly Button _previousButton = new() { AutoSize = true, Text = "◀ 이전" };
+    private readonly Button _nextButton = new() { AutoSize = true, Text = "다음 ▶" };
+    private readonly Label _pageIndicator = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleCenter };
     private bool _opened;
 
     public MainForm()
@@ -57,20 +72,50 @@ public sealed class MainForm : Form
         MinimumSize = new Size(900, 600);
         BackColor = Color.FromArgb(238, 242, 247);
 
-        _renderer = new CetzDocumentRenderer(new CetzRendererOptions
+        _rendererOptions = new CetzRendererOptions
         {
             NativeLibraryPath = ResolveNativeLibrary(),
             PackageResolution = CetzPackageResolution.EmbeddedOnly
-        });
+        };
 
         _demoPicker.SelectedIndexChanged += DemoPicker_SelectedIndexChanged;
         _renderButton.Click += async (_, _) => await RenderAsync();
+        _zoomModePicker.Items.AddRange(Enum.GetValues<CetzZoomMode>().Cast<object>().ToArray());
+        _viewModePicker.Items.AddRange(Enum.GetValues<CetzPageViewMode>().Cast<object>().ToArray());
+        _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
+        _viewModePicker.SelectedItem = CetzPageViewMode.ContinuousSingle;
+        _zoomModePicker.SelectedIndexChanged += (_, _) =>
+        {
+            if (_zoomModePicker.SelectedItem is CetzZoomMode mode)
+            {
+                _preview.SetZoomMode(mode);
+                _zoom.Enabled = mode == CetzZoomMode.Custom;
+            }
+            UpdateNavigation();
+        };
+        _viewModePicker.SelectedIndexChanged += (_, _) =>
+        {
+            if (_viewModePicker.SelectedItem is CetzPageViewMode mode) _preview.SetViewMode(mode);
+            UpdateNavigation();
+        };
+        _zoom.ValueChanged += (_, _) =>
+        {
+            _preview.SetZoom((double)_zoom.Value);
+            _zoomModePicker.SelectedItem = CetzZoomMode.Custom;
+        };
+        _previousButton.Click += (_, _) => { _preview.MovePrevious(); UpdateNavigation(); };
+        _nextButton.Click += (_, _) => { _preview.MoveNext(); UpdateNavigation(); };
         Shown += async (_, _) =>
         {
+            _renderController = new CetzRenderController(
+                _preview, _rendererOptions, SynchronizationContext.Current);
             _opened = true;
             await RenderAsync();
         };
-        FormClosed += (_, _) => _renderer.Dispose();
+        FormClosed += (_, _) =>
+        {
+            _renderController?.Dispose();
+        };
 
         _demoPicker.Items.AddRange(CetzDemoCatalog.All.Cast<object>().ToArray());
         Controls.Add(BuildLayout());
@@ -139,8 +184,41 @@ public sealed class MainForm : Form
             SplitterWidth = 5
         };
         split.Panel1.Controls.Add(editor);
-        split.Panel2.Controls.Add(_preview);
+        var previewPanel = new TableLayoutPanel
+        {
+            ColumnCount = 1,
+            Dock = DockStyle.Fill,
+            RowCount = 2
+        };
+        previewPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        previewPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        previewPanel.Controls.Add(BuildPreviewToolbar(), 0, 0);
+        previewPanel.Controls.Add(_preview, 0, 1);
+        split.Panel2.Controls.Add(previewPanel);
         return split;
+    }
+
+    private Control BuildPreviewToolbar()
+    {
+        var toolbar = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            BackColor = Color.White,
+            Dock = DockStyle.Fill,
+            Padding = new Padding(8),
+            WrapContents = true
+        };
+        toolbar.Controls.AddRange([
+            new Label { AutoSize = true, Margin = new Padding(3, 8, 3, 3), Text = "확대:" },
+            _zoomModePicker,
+            _zoom,
+            new Label { AutoSize = true, Margin = new Padding(12, 8, 3, 3), Text = "보기:" },
+            _viewModePicker,
+            _previousButton,
+            _pageIndicator,
+            _nextButton
+        ]);
+        return toolbar;
     }
 
     private async void DemoPicker_SelectedIndexChanged(object? sender, EventArgs e)
@@ -160,19 +238,19 @@ public sealed class MainForm : Form
 
     private async Task RenderAsync()
     {
-        if (_demoPicker.SelectedItem is not CetzDemo demo)
+        if (_demoPicker.SelectedItem is not CetzDemo demo || _renderController is null)
             return;
 
         SetRenderingState(true, "렌더링 중…", Color.SlateGray);
         try
         {
-            var document = await _renderer.RenderProjectAsync(
+            var document = await _renderController.RenderProjectAsync(
                 demo.CreateProject(_source.Text),
                 options: new CetzDocumentRenderOptions { Ppi = 144 });
 
-            if (IsDisposed)
+            if (IsDisposed || document is null)
                 return;
-            _preview.Document = document;
+            UpdateNavigation();
             var summary = $"{demo.DisplayName} · {demo.Paths.Count} file(s) · {document.Pages.Count} page(s) · " +
                 $"{document.Timing.TotalMilliseconds:F0} ms";
             _status.Text = summary;
@@ -181,7 +259,7 @@ public sealed class MainForm : Form
         }
         catch (Exception exception)
         {
-            if (IsDisposed)
+            if (IsDisposed || !ReferenceEquals(_renderController.LastError, exception))
                 return;
             _status.Text = exception.Message;
             _status.ForeColor = Color.Crimson;
@@ -189,7 +267,7 @@ public sealed class MainForm : Form
         }
         finally
         {
-            if (!IsDisposed)
+            if (!IsDisposed && !_renderController.IsRendering)
                 SetRenderingState(false, _status.Text, _status.ForeColor);
         }
     }
@@ -197,11 +275,29 @@ public sealed class MainForm : Form
     private void SetRenderingState(bool rendering, string status, Color color)
     {
         _renderButton.Enabled = !rendering;
-        _demoPicker.Enabled = !rendering;
         _status.Text = status;
         _status.ForeColor = color;
         UseWaitCursor = rendering;
     }
+
+    private void UpdateNavigation()
+    {
+        var count = _preview.PageCount;
+        var displayPage = count == 0 ? 0 : _preview.CurrentPageIndex + 1;
+        var facing = _preview.ViewMode is CetzPageViewMode.ContinuousFacing or CetzPageViewMode.FacingPages;
+        var lastVisible = count == 0 ? 0 : Math.Min(count, displayPage + (facing ? 1 : 0));
+        _pageIndicator.Text = facing && lastVisible > displayPage
+            ? $"{displayPage}–{lastVisible} / {count}"
+            : $"{displayPage} / {count}";
+        _previousButton.Enabled = count > 0 && _preview.CurrentPageIndex > 0;
+        _nextButton.Enabled = count > 0 && _preview.CurrentPageIndex + (facing ? 2 : 1) < count;
+    }
+
+    private static ComboBox CreateEnumPicker() => new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 132
+    };
 
     private static string ResolveNativeLibrary()
     {
