@@ -80,6 +80,7 @@ jobs:
             $restored = $expected -eq $actual
           }
           "restored=$restored".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+          exit 0
       - if: steps.native-release.outputs.restored != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
