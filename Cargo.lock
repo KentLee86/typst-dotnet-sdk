@@ -205,21 +205,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "typst-dotnet-native"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs",
- "serde",
- "serde_json",
- "typst",
- "typst-as-lib",
- "typst-pdf",
- "typst-render",
- "typst-svg",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1666,6 +1651,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "poc-vector-bench"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "png 0.17.16",
+ "resvg",
+ "tiny-skia",
+ "typst",
+ "typst-dotnet-native",
+ "usvg",
+]
+
+[[package]]
 name = "polycool"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2561,6 +2560,21 @@ name = "typst-assets"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5613cb719a6222fe9b74027c3625d107767ec187bff26b8fc931cf58942c834f"
+
+[[package]]
+name = "typst-dotnet-native"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "serde",
+ "serde_json",
+ "typst",
+ "typst-as-lib",
+ "typst-pdf",
+ "typst-render",
+ "typst-svg",
+]
 
 [[package]]
 name = "typst-eval"

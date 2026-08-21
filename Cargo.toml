@@ -1,5 +1,5 @@
 [workspace]
-members = ["native/typst-dotnet-native"]
+members = ["native/poc-vector-bench", "native/typst-dotnet-native"]
 resolver = "2"
 
 [profile.release]

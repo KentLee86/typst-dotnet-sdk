@@ -1,0 +1,21 @@
+[package]
+name = "poc-vector-bench"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "poc-vector-bench"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+flate2 = "1.1"
+png = "0.17"
+resvg = "=0.45.1"
+tiny-skia = "=0.11.4"
+typst = "=0.14.2"
+typst-dotnet-native = { path = "../typst-dotnet-native" }
+usvg = "=0.45.1"
